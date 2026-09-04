@@ -7,56 +7,96 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css"/>
 <!-- Firebase SDK -->
 <script type="module">
-  
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCyuYu7dzJ1TBcWUWW_bQbdbblapF0Rmbc",
-  authDomain: "leadranki2.firebaseapp.com",
-  projectId: "leadranki2",
-  storageBucket: "leadranki2.firebasestorage.app",
-  messagingSenderId: "226160230105",
-  appId: "1:226160230105:web:ba41143aa5b8ae5b0688c8",
-  measurementId: "G-7SXMRHYHGS"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const db = getDatabase(app);
-
-
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+ 
+  // ══════════════════════════════════════════════
+  // 🔥 COLOQUE AQUI AS SUAS CREDENCIAIS DO FIREBASE
+  // (Firebase Console → Seu projeto → Configurações → SDK)
+  // ══════════════════════════════════════════════
+  const firebaseConfig = {
+    apiKey:            "AIzaSyD7vmEtUxAbL3rFGC4vNx2gTnm427eN8u0",
+    authDomain:        "sitebcred.firebaseapp.com",
+    databaseURL:       "https://sitebcred-default-rtdb.firebaseio.com",   // ex: https://SEU-PROJETO-default-rtdb.firebaseio.com
+    projectId:         "sitebcred",
+    storageBucket:     "sitebcred.firebasestorage.app",
+    messagingSenderId: "938229295501",
+    appId:             "1:938229295501:web:2337bf72962d27a868f5c4"
+  };
+ 
+  const app  = initializeApp(firebaseConfig);
+  const db   = getDatabase(app);
+  const auth = getAuth(app);
+ 
   // ── Salvar no Firebase (substitui localStorage.setItem) ──
   window.fbSalvar = function(chave, dados){
     set(ref(db, chave), dados);
   };
-
+ 
   // ── Carregar do Firebase uma vez (substitui localStorage.getItem) ──
   window.fbCarregar = function(chave, callback){
     get(ref(db, chave)).then(snap => {
       callback(snap.exists() ? snap.val() : null);
     });
   };
-
+ 
   // ── Escutar mudanças em tempo real ──
   window.fbEscutar = function(chave, callback){
     onValue(ref(db, chave), snap => {
       callback(snap.exists() ? snap.val() : null);
     });
   };
-
+ 
+  // ── Gerar uma chave única do Firebase (para registros de vendas) ──
+  window.fbNovaChave = function(chave){
+    return push(ref(db, chave)).key;
+  };
+ 
+  // ══════════════════════════════════════════════
+  // 🔐 Firebase Authentication — usado SÓ para o administrador
+  // (login das vendedoras continua igual, via 'usuarios')
+  // ══════════════════════════════════════════════
+  window.fbAuth = auth;
+ 
+  window.fbAdminLogin = function(email, senha){
+    return signInWithEmailAndPassword(auth, email, senha);
+  };
+ 
+  window.fbAdminCriarConta = function(email, senha){
+    return createUserWithEmailAndPassword(auth, email, senha);
+  };
+ 
+  window.fbAdminLogout = function(){
+    return signOut(auth);
+  };
+ 
+  onAuthStateChanged(auth, user => {
+    if(window.onFirebaseAuthChange) window.onFirebaseAuthChange(user);
+  });
+ 
   // ── Assim que o Firebase estiver pronto, inicializa tudo ──
   window.addEventListener('load', () => {
+    // Ranking Abril
+    fbEscutar('ranking/abril', val => {
+      if(val) dados.abril = val;
+      buildInputs('abril');
+      renderMes('abril');
+      renderCampanhaIphone();
+    });
     // Ranking Maio
     fbEscutar('ranking/maio', val => {
       if(val) dados.maio = val;
-      renderMaioReadonly();
+      buildInputs('maio');
+      renderMes('maio');
       renderCampanhaIphone();
     });
-
-    // Ranking Junho (encerrado — somente leitura)
+ 
+    // Ranking Junho
     fbEscutar('ranking/junho', val => {
       if(val) dados.junho = val;
-      renderJunhoReadonly();
+      buildInputs('junho');
+      renderMes('junho');
       renderCampanhaIphone();
     });
     // Ranking Julho
@@ -96,12 +136,30 @@ fbEscutar('ranking/julho', val => {
       buildInputs('dezembro');
       renderMes('dezembro');
     });
-
+ 
     // Rodízio de Leads
     fbEscutar('rodizio/leads', val => {
       window._rodLeads = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
       rodRenderTabela();
     });
+ 
+    // Usuários com acesso (login)
+    fbEscutar('usuarios', val => {
+      if(val){
+        USUARIOS = val;
+      } else if(window.fbSalvar){
+        // Primeira vez: envia os usuários padrão para o Firebase
+        window.fbSalvar('usuarios', USUARIOS);
+      }
+      adminRenderLista();
+    });
+ 
+    // ── Novo modelo (painel administrativo) ──
+    fbEscutar('admins', val => { if(window.onAdminsChange) window.onAdminsChange(val || {}); });
+    fbEscutar('membros', val => { if(window.onMembrosChange) window.onMembrosChange(val || null); });
+    fbEscutar('metas', val => { if(window.onMetasChange) window.onMetasChange(val || {}); });
+    fbEscutar('mesesConfig', val => { if(window.onMesesConfigChange) window.onMesesConfigChange(val || null); });
+    fbEscutar('vendasDetalhe', val => { if(window.onVendasChange) window.onVendasChange(val || {}); });
   });
 </script>
 <style>
@@ -146,7 +204,7 @@ body{
 .meta-bar{width:100%;height:10px;background:#333;border-radius:999px;overflow:hidden;margin-top:10px;}
 .meta-bar-fill{height:100%;background:linear-gradient(90deg,#b8972a,#ffd86a);}
 .section-label{font-size:12px;font-weight:700;margin-bottom:1rem;text-transform:uppercase;color:#777;}
-.input-row{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:1rem;}
+.input-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-top:1rem;}
 .inp-group label{font-size:11px;margin-bottom:4px;display:block;}
 .inp-group input{
   width:100%;padding:8px;border-radius:8px;
@@ -211,11 +269,7 @@ body{
   .input-row{grid-template-columns:repeat(2,1fr);}
   .acumulado-grid{grid-template-columns:repeat(2,1fr);}
 }
-
-.festa-card{background:#111;border:1px solid rgba(255,215,106,.25);border-radius:16px;padding:16px;margin-top:15px}
-.festa-title{font-size:18px;font-weight:700;color:#ffd86a}
-.festa-items{color:#ccc;font-size:13px;line-height:1.8;margin-top:10px}
-
+ 
 /* ── Login ───────────────────────────────────────── */
 #login-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,0.92);
@@ -259,7 +313,45 @@ body{
   padding:6px 14px;color:var(--gold);font-size:12px;display:none;
   cursor:pointer;
 }
-
+#admin-badge{
+  position:fixed;top:10px;right:10px;z-index:999;
+  background:rgba(60,180,60,0.15);border:1px solid rgba(60,180,60,0.4);border-radius:20px;
+  padding:6px 14px;color:#5ddd5d;font-size:12px;display:none;
+  cursor:pointer;font-weight:700;
+}
+ 
+/* ── Painel Administrativo ────────────────────────── */
+.tab-admin{
+  background:rgba(60,180,60,0.08);
+  border-left:1px solid rgba(93,221,93,0.2);
+}
+.tab-admin.active{background:rgba(60,180,60,0.15);color:#5ddd5d!important;border-bottom-color:#5ddd5d!important;}
+.admin-subtabs{
+  display:flex;overflow:auto;background:#191915;border-bottom:1px solid #333;
+}
+.admin-subtab-btn{
+  background:none;border:none;color:#888;padding:12px 16px;
+  cursor:pointer;font-size:12px;font-weight:700;white-space:nowrap;
+  border-bottom:2px solid transparent;
+}
+.admin-subtab-btn.active{color:#5ddd5d;border-bottom-color:#5ddd5d;}
+.admin-subpanel{display:none;}
+.admin-subpanel.active{display:block;}
+.admin-setup-box{
+  margin:1.5rem;padding:1.2rem;background:rgba(93,221,93,0.06);
+  border:1px solid rgba(93,221,93,0.3);border-radius:14px;color:#ddd;font-size:13px;
+}
+.admin-setup-box strong{color:#5ddd5d;}
+.meta-edit-row{
+  display:flex;align-items:center;gap:8px;margin-top:6px;
+}
+.meta-edit-row input{
+  width:110px;padding:7px 9px;border-radius:8px;border:1px solid #444;
+  background:#1a1a18;color:#ffd86a;font-size:13px;
+}
+.mes-badge-aberto{background:rgba(60,180,60,0.15);color:#5ddd5d;border:1px solid rgba(60,180,60,0.35);padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+.mes-badge-fechado{background:rgba(220,60,60,0.15);color:#e05555;border:1px solid rgba(220,60,60,0.35);padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;}
+ 
 /* ── Rodízio de Leads ─────────────────────────────── */
 .tab-rodizio{
   background:rgba(184,151,42,0.08);
@@ -268,15 +360,14 @@ body{
 .tab-rodizio.active{
   background:rgba(184,151,42,0.15);
 }
-
+ 
 /* Dashboard */
 .rod-dashboard{
-  display:grid;grid-template-columns:repeat(5,1fr);gap:10px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;
   padding:1.2rem 1.5rem 0;
 }
-@media(max-width:700px){.rod-dashboard{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:400px){.rod-dashboard{grid-template-columns:1fr;}}
-
+ 
 .rod-card{
   background:#222;border-radius:14px;padding:14px 10px;text-align:center;
   border:1px solid #333;transition:transform .15s;
@@ -293,21 +384,25 @@ body{
 .rod-vermelho .rod-card-val{color:#e05555;}
 .rod-enviado{border-color:rgba(100,150,255,0.35);background:rgba(100,150,255,0.08);}
 .rod-enviado .rod-card-val{color:#7faeff;}
-
+.rod-whats{border-color:rgba(37,211,102,0.35);background:rgba(37,211,102,0.08);}
+.rod-whats .rod-card-val{color:#25d366;}
+.rod-api{border-color:rgba(122,90,248,0.35);background:rgba(122,90,248,0.08);}
+.rod-api .rod-card-val{color:#a084ff;}
+ 
 /* Sections */
 .rod-section{padding:1.2rem 1.5rem;}
 .rod-form-title{
   font-size:13px;font-weight:700;color:#bbb;text-transform:uppercase;
   letter-spacing:.05em;margin-bottom:12px;
 }
-
+ 
 /* Form */
 .rod-form-grid{
   display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
 }
 @media(max-width:600px){.rod-form-grid{grid-template-columns:1fr 1fr;}}
 @media(max-width:380px){.rod-form-grid{grid-template-columns:1fr;}}
-
+ 
 .rod-field label{
   display:block;font-size:11px;color:#888;margin-bottom:4px;
 }
@@ -321,7 +416,7 @@ body{
 .rod-field select:focus{border-color:var(--gold);}
 .rod-field select option{background:#1a1a18;color:#ffd86a;}
 .rod-field-full{grid-column:1/-1;}
-
+ 
 .rod-btn-add{
   margin-top:12px;background:var(--gold);color:#111;border:none;
   padding:10px 22px;border-radius:9px;cursor:pointer;font-weight:700;
@@ -333,14 +428,13 @@ body{
   animation:fadeIn .3s;
 }
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
-
+ 
 /* Filtros */
 .rod-filtros-grid{
-  display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;
 }
-@media(max-width:700px){.rod-filtros-grid{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:400px){.rod-filtros-grid{grid-template-columns:1fr;}}
-
+ 
 /* Tabela */
 .rod-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #333;}
 .rod-table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -358,7 +452,7 @@ body{
 .rod-table tbody tr{transition:background .12s;}
 .rod-table tbody tr:hover{background:rgba(255,255,255,0.03);}
 .rod-empty{text-align:center;color:#555;font-style:italic;padding:2rem!important;}
-
+ 
 /* Status badges */
 .rod-status{
   display:inline-flex;align-items:center;gap:5px;
@@ -369,10 +463,14 @@ body{
 .rod-s-apto   {background:rgba(220,190,0,0.15);color:#ffd86a;border:1px solid rgba(220,190,0,0.35);}
 .rod-s-atras  {background:rgba(220,60,60,0.15);color:#e05555;border:1px solid rgba(220,60,60,0.35);}
 .rod-s-enviado{background:rgba(100,150,255,0.15);color:#7faeff;border:1px solid rgba(100,150,255,0.35);}
-
+ 
+.rod-origem{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;}
+.rod-origem-whatsapp{background:rgba(37,211,102,0.15);color:#25d366;border:1px solid rgba(37,211,102,0.35);}
+.rod-origem-api{background:rgba(122,90,248,0.15);color:#a084ff;border:1px solid rgba(122,90,248,0.35);}
+ 
 /* Row highlight when enviado */
 .rod-row-enviado td{opacity:.72;}
-
+ 
 /* Action buttons */
 .rod-btn-action{
   background:none;border:1px solid #555;color:#aaa;padding:5px 9px;
@@ -385,7 +483,7 @@ body{
 .rod-btn-del{border-color:rgba(220,60,60,0.4);color:#e05555;}
 .rod-btn-del:hover{background:rgba(220,60,60,0.1);}
 .rod-dias-num{font-weight:700;font-size:15px;}
-
+ 
 </style>
 </head>
 <body>
@@ -394,22 +492,37 @@ body{
   <div class="login-box">
     <div class="login-logo">🏆</div>
     <div class="login-title">Ranking de Metas</div>
-    <div class="login-sub">Entre com seu usuário e senha</div>
-    <input class="login-field" id="login-user" type="text" placeholder="Usuário" autocomplete="off">
-    <input class="login-field" id="login-pass" type="password" placeholder="Senha">
-    <button class="login-btn" onclick="tentarLogin()">Entrar</button>
+    <div class="login-sub" id="login-sub-txt">Entre com seu usuário e senha</div>
+ 
+    <!-- Login de vendedora (igual ao de sempre) -->
+    <div id="login-form-vendedora">
+      <input class="login-field" id="login-user" type="text" placeholder="Usuário" autocomplete="off">
+      <input class="login-field" id="login-pass" type="password" placeholder="Senha">
+      <button class="login-btn" onclick="tentarLogin()">Entrar</button>
+    </div>
+ 
+    <!-- Login/criação de administrador (Firebase Auth real) -->
+    <div id="login-form-admin" style="display:none">
+      <input class="login-field" id="admin-login-email" type="email" placeholder="E-mail do administrador" autocomplete="off">
+      <input class="login-field" id="admin-login-senha" type="password" placeholder="Senha (mín. 6 caracteres)">
+      <button class="login-btn" id="admin-login-btn" onclick="tentarLoginAdmin()">Entrar como administrador</button>
+    </div>
+ 
     <div class="login-err" id="login-err"></div>
+    <div class="login-guest" id="login-toggle-admin" onclick="alternarFormLogin()">🔐 Sou administrador</div>
     <div class="login-guest" onclick="entrarVisitante()">👁️ Entrar como visitante (somente leitura)</div>
   </div>
 </div>
-
+ 
 <!-- Badge usuário logado -->
 <div id="user-badge" onclick="logout()">👤 <span id="user-badge-nome"></span> &nbsp;· Sair</div>
 <!-- Badge visitante -->
 <div id="visitor-badge">👁️ Modo visitante</div>
-
+<!-- Badge administrador -->
+<div id="admin-badge" onclick="logoutAdmin()">🛡️ Administrador &nbsp;· Sair</div>
+ 
 <div class="container">
-
+ 
   <div class="header">
     <div>
       <div class="logo-title">🏆 Ranking de Metas</div>
@@ -417,7 +530,7 @@ body{
     </div>
     <div style="font-size:28px;">🏆</div>
   </div>
-
+ 
   <div class="tabs">
     <button class="tab-btn" id="tab-abril"    onclick="switchTab('abril')">Abril</button>
     <button class="tab-btn" id="tab-maio"     onclick="switchTab('maio')">Maio</button>
@@ -429,240 +542,249 @@ body{
     <button class="tab-btn" id="tab-novembro" onclick="switchTab('novembro')">Novembro</button>
     <button class="tab-btn" id="tab-dezembro" onclick="switchTab('dezembro')">Dezembro</button>
     <button class="tab-btn tab-rodizio" id="tab-rodizio" onclick="switchTab('rodizio')" style="display:none">📋 Rodízio de Leads</button>
+    <button class="tab-btn tab-rodizio" id="tab-usuarios" onclick="switchTab('usuarios')" style="display:none">🔑 Usuários</button>
+    <button class="tab-btn tab-admin" id="tab-painel-admin" onclick="switchTab('painel-admin')" style="display:none">🛡️ Painel Admin</button>
   </div>
-
+ 
   <div class="iphone-campanha" id="campanhaIphone"></div>
-<div class="iphone-campanha">
-<div style="font-size:18px;font-weight:700;color:#ffd86a;">🌽 Campanha Festa Junina</div>
-
-<div class="festa-card">
-<div class="festa-title">🌽 Festa FONC • Meta 180k</div>
-<div class="meta-bar"><div class="meta-bar-fill" style="width:35%"></div></div>
-<div class="festa-items">🍿 Pipoca • 🎂 Bolo • 🌭 Cachorro Quente • 🥜 Paçoca • 🍷 Quentão</div>
-</div>
-
-<div class="festa-card">
-<div class="festa-title">🎉 Festa TOP • Meta 240k</div>
-<div class="meta-bar"><div class="meta-bar-fill" style="width:26%"></div></div>
-<div class="festa-items">🍿 Pipoca • 🎂 Bolo • 🌭 Cachorro Quente • 🥜 Paçoca • 🍷 Quentão • 🌽 Canjica • 🌽 Milho • 🍎 Maçã do Amor</div>
-</div>
-
-<div class="festa-card">
-<div class="festa-title">👑 Festa Premium • Meta 300k</div>
-<div class="meta-bar"><div class="meta-bar-fill" style="width:21%"></div></div>
-<div class="festa-items">🍿 Pipoca • 🎂 Bolo • 🌭 Cachorro Quente • 🥜 Paçoca • 🍷 Quentão • 🌽 Canjica • 🌽 Milho • 🍎 Maçã do Amor • 🥣 Curau • 🍚 Arroz Doce • 🍬 Doces Típicos</div>
-</div>
-</div>
-
-
-  <!-- ===== ABRIL (FECHADO) ===== -->
+ 
+ 
+  <!-- ===== ABRIL ===== -->
   <div class="tab-panel" id="panel-abril">
     <div class="section">
+ 
       <div class="meta-equipe">
-        <div class="meta-title">META DA EQUIPE — ABRIL <span class="locked-badge">🔒 Encerrado</span></div>
-        <div class="meta-value">R$ 2.274,38</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
-        <div class="meta-percent">7,58% concluído</div>
-        <div class="meta-bar"><div class="meta-bar-fill" style="width:7.58%"></div></div>
+        <div class="meta-title">META DA EQUIPE — ABRIL</div>
+        <div class="meta-value" id="metaValor-abril">R$ 0,00</div>
+        <div class="meta-sub" id="metaSub-abril">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-percent" id="metaPct-abril">0% concluído</div>
+        <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-abril" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Ranking</div>
-      <div class="ranking-list">
-        <div class="rank-item primeiro">
-          <div class="rank-badge">🥇</div>
-          <div class="rank-name">Isabelly</div>
-          <div class="rank-values">
-            <div>R$ 1.325,25</div>
-            <div class="rank-pct atingiu">165% ✓ Meta atingida</div>
-          </div>
-          <div class="bar-wrap"><div class="bar-fill verde" style="width:100%"></div></div>
-        </div>
-        <div class="rank-item">
-          <div class="rank-badge">🥈</div>
-          <div class="rank-name">Vitoria</div>
-          <div class="rank-values">
-            <div>R$ 490,00</div>
-            <div class="rank-pct ouro">61% da meta</div>
-          </div>
-          <div class="bar-wrap"><div class="bar-fill ouro" style="width:61%"></div></div>
-        </div>
-        <div class="rank-item">
-          <div class="rank-badge">🥉</div>
-          <div class="rank-name">Iohanni</div>
-          <div class="rank-values">
-            <div>R$ 459,13</div>
-            <div class="rank-pct ouro">57% da meta</div>
-          </div>
-          <div class="bar-wrap"><div class="bar-fill ouro" style="width:57%"></div></div>
-        </div>
-      </div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Paredão ☠️</div>
-        <div class="paredao">
-          <div class="paredao-title">☠️ Menor desempenho do mês</div>
-          <div class="rebaixado"><span>Vitoria</span><strong>R$ 490,00</strong></div>
-          <div class="rebaixado"><span>Iohanni</span><strong>R$ 459,13</strong></div>
-        </div>
-      </div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Comparativo em gráfico</div>
-        <div class="chart-wrap"><canvas id="chart-abril"></canvas></div>
+ 
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
+      <div class="input-row" id="inputs-abril"></div>
+      <button class="update-btn" onclick="atualizar('abril')">Registrar vendas</button>
+ 
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Resumo do time</div>
+      <div class="metrics-row" id="metrics-abril"></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Ranking</div>
+      <div class="ranking-list" id="ranking-abril"></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Paredão ☠️</div>
+      <div class="paredao" id="paredao-abril">
+        <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
     </div>
+ 
+    <div class="section">
+      <div class="section-label">Comparativo em gráfico</div>
+      <div class="chart-wrap"><canvas id="chart-abril"></canvas></div>
+    </div>
   </div>
-
-  <!-- ===== MAIO (FECHADO) ===== -->
+ 
+  <!-- ===== MAIO ===== -->
   <div class="tab-panel" id="panel-maio">
     <div class="section">
-      <div class="meta-equipe" id="meta-equipe-maio-box">
-        <div class="meta-title">META DA EQUIPE — MAIO <span class="locked-badge">🔒 Encerrado</span></div>
-        <div class="meta-value" id="metaValor-maio">—</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
-        <div class="meta-percent" id="metaPct-maio">—</div>
+ 
+      <div class="meta-equipe">
+        <div class="meta-title">META DA EQUIPE — MAIO</div>
+        <div class="meta-value" id="metaValor-maio">R$ 0,00</div>
+        <div class="meta-sub" id="metaSub-maio">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-percent" id="metaPct-maio">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-maio" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Ranking</div>
+ 
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
+      <div class="input-row" id="inputs-maio"></div>
+      <button class="update-btn" onclick="atualizar('maio')">Registrar vendas</button>
+ 
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Resumo do time</div>
+      <div class="metrics-row" id="metrics-maio"></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Ranking</div>
       <div class="ranking-list" id="ranking-maio"></div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Paredão ☠️</div>
-        <div class="paredao" id="paredao-maio">
-          <div class="paredao-title">☠️ Menor desempenho do mês</div>
-        </div>
-      </div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Comparativo em gráfico</div>
-        <div class="chart-wrap"><canvas id="chart-maio"></canvas></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Paredão ☠️</div>
+      <div class="paredao" id="paredao-maio">
+        <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
     </div>
+ 
+    <div class="section">
+      <div class="section-label">Comparativo em gráfico</div>
+      <div class="chart-wrap"><canvas id="chart-maio"></canvas></div>
+    </div>
   </div>
-
-  <!-- ===== JUNHO (FECHADO) ===== -->
+ 
+  <!-- ===== JUNHO ===== -->
   <div class="tab-panel" id="panel-junho">
     <div class="section">
-      <div class="meta-equipe" id="meta-equipe-junho-box">
-        <div class="meta-title">META DA EQUIPE — JUNHO <span class="locked-badge">🔒 Encerrado</span></div>
-        <div class="meta-value" id="metaValor-junho">—</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
-        <div class="meta-percent" id="metaPct-junho">—</div>
+ 
+      <div class="meta-equipe">
+        <div class="meta-title">META DA EQUIPE — JUNHO</div>
+        <div class="meta-value" id="metaValor-junho">R$ 0,00</div>
+        <div class="meta-sub" id="metaSub-junho">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-percent" id="metaPct-junho">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-junho" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Ranking</div>
+ 
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
+      <div class="input-row" id="inputs-junho"></div>
+      <button class="update-btn" onclick="atualizar('junho')">Registrar vendas</button>
+ 
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Resumo do time</div>
+      <div class="metrics-row" id="metrics-junho"></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Ranking</div>
       <div class="ranking-list" id="ranking-junho"></div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Paredão ☠️</div>
-        <div class="paredao" id="paredao-junho">
-          <div class="paredao-title">☠️ Menor desempenho do mês</div>
-        </div>
-      </div>
-      <div class="section" style="padding:1.5rem 0 0 0;">
-        <div class="section-label">Comparativo em gráfico</div>
-        <div class="chart-wrap"><canvas id="chart-junho"></canvas></div>
+    </div>
+ 
+    <div class="section">
+      <div class="section-label">Paredão ☠️</div>
+      <div class="paredao" id="paredao-junho">
+        <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
     </div>
+ 
+    <div class="section">
+      <div class="section-label">Comparativo em gráfico</div>
+      <div class="chart-wrap"><canvas id="chart-junho"></canvas></div>
+    </div>
   </div>
-
+ 
   <!-- ===== JULHO (ATIVO) ===== -->
   <div class="tab-panel active" id="panel-julho">
     <div class="section">
-
+ 
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — JULHO</div>
         <div class="meta-value" id="metaValor-julho">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-julho">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-julho">0% concluído</div>
         <div class="meta-bar">
           <div class="meta-bar-fill" id="metaBar-julho" style="width:0%"></div>
         </div>
       </div>
-
+ 
       <div class="section-label" style="margin-top:1.5rem;">
-        Editar comissões
+        Registrar vendas
       </div>
-
+ 
       <div class="input-row" id="inputs-julho"></div>
-
+ 
       <button class="update-btn" onclick="atualizar('julho')">
-        Atualizar ranking
+        Registrar vendas
       </button>
-
+ 
     </div>
-
+ 
     <div class="section">
-
+ 
       <div class="section-label">
         Resumo do time
       </div>
-
+ 
       <div class="metrics-row" id="metrics-julho"></div>
-
+ 
     </div>
-
+ 
     <div class="section">
-
+ 
       <div class="section-label">
         Ranking
       </div>
-
+ 
       <div class="ranking-list" id="ranking-julho"></div>
-
+ 
     </div>
         <div class="section">
-
+ 
       <div class="section-label">
         Paredão ☠️
       </div>
-
+ 
       <div class="paredao" style="
         margin-top:12px;
         background:rgba(120,120,120,.08);
         border:1px solid rgba(180,180,180,.25);
       ">
-
+ 
         <div class="paredao-title" style="color:#c0c0c0;">
           🚫 Hall dos Desclassificados
         </div>
-
+ 
         <div class="rebaixado">
           <span>Geovanna</span>
           <strong>Desclassificada</strong>
         </div>
-
+ 
+        <div class="rebaixado">
+          <span>Iohanni</span>
+          <strong>Desclassificada</strong>
+        </div>
+ 
+        <div class="rebaixado">
+          <span>Vitoria</span>
+          <strong>Desclassificada</strong>
+        </div>
+ 
       </div>
-
+ 
       <div class="paredao" id="paredao-julho">
         <div class="paredao-title">
           ☠️ Menor desempenho do mês
         </div>
       </div>
-
+ 
     </div>
-
+ 
     <div class="section">
-
+ 
       <div class="section-label">
         Comparativo em gráfico
       </div>
-
+ 
       <div class="chart-wrap">
         <canvas id="chart-julho"></canvas>
       </div>
-
+ 
     </div>
-
+ 
   </div>
-
+ 
   <!-- ===== AGOSTO (ABERTO) ===== -->
   <div class="tab-panel" id="panel-agosto">
     <div class="section">
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — AGOSTO</div>
         <div class="meta-value" id="metaValor-agosto">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-agosto">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-agosto">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-agosto" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Editar comissões</div>
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
       <div class="input-row" id="inputs-agosto"></div>
-      <button class="update-btn" onclick="atualizar('agosto')">Atualizar ranking</button>
+      <button class="update-btn" onclick="atualizar('agosto')">Registrar vendas</button>
     </div>
     <div class="section">
       <div class="section-label">Resumo do time</div>
@@ -674,6 +796,18 @@ body{
     </div>
     <div class="section">
       <div class="section-label">Paredão ☠️</div>
+ 
+      <div class="paredao" style="
+        margin-top:12px;
+        background:rgba(120,120,120,.08);
+        border:1px solid rgba(180,180,180,.25);
+      ">
+        <div class="paredao-title" style="color:#c0c0c0;">🚫 Hall dos Desclassificados</div>
+        <div class="rebaixado"><span>Geovanna</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Iohanni</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Vitoria</span><strong>Desclassificada</strong></div>
+      </div>
+ 
       <div class="paredao" id="paredao-agosto">
         <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
@@ -683,20 +817,20 @@ body{
       <div class="chart-wrap"><canvas id="chart-agosto"></canvas></div>
     </div>
   </div>
-
+ 
   <!-- ===== SETEMBRO (ABERTO) ===== -->
   <div class="tab-panel" id="panel-setembro">
     <div class="section">
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — SETEMBRO</div>
         <div class="meta-value" id="metaValor-setembro">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-setembro">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-setembro">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-setembro" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Editar comissões</div>
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
       <div class="input-row" id="inputs-setembro"></div>
-      <button class="update-btn" onclick="atualizar('setembro')">Atualizar ranking</button>
+      <button class="update-btn" onclick="atualizar('setembro')">Registrar vendas</button>
     </div>
     <div class="section">
       <div class="section-label">Resumo do time</div>
@@ -708,6 +842,18 @@ body{
     </div>
     <div class="section">
       <div class="section-label">Paredão ☠️</div>
+ 
+      <div class="paredao" style="
+        margin-top:12px;
+        background:rgba(120,120,120,.08);
+        border:1px solid rgba(180,180,180,.25);
+      ">
+        <div class="paredao-title" style="color:#c0c0c0;">🚫 Hall dos Desclassificados</div>
+        <div class="rebaixado"><span>Geovanna</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Iohanni</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Vitoria</span><strong>Desclassificada</strong></div>
+      </div>
+ 
       <div class="paredao" id="paredao-setembro">
         <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
@@ -717,20 +863,20 @@ body{
       <div class="chart-wrap"><canvas id="chart-setembro"></canvas></div>
     </div>
   </div>
-
+ 
   <!-- ===== OUTUBRO (ABERTO) ===== -->
   <div class="tab-panel" id="panel-outubro">
     <div class="section">
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — OUTUBRO</div>
         <div class="meta-value" id="metaValor-outubro">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-outubro">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-outubro">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-outubro" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Editar comissões</div>
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
       <div class="input-row" id="inputs-outubro"></div>
-      <button class="update-btn" onclick="atualizar('outubro')">Atualizar ranking</button>
+      <button class="update-btn" onclick="atualizar('outubro')">Registrar vendas</button>
     </div>
     <div class="section">
       <div class="section-label">Resumo do time</div>
@@ -742,6 +888,18 @@ body{
     </div>
     <div class="section">
       <div class="section-label">Paredão ☠️</div>
+ 
+      <div class="paredao" style="
+        margin-top:12px;
+        background:rgba(120,120,120,.08);
+        border:1px solid rgba(180,180,180,.25);
+      ">
+        <div class="paredao-title" style="color:#c0c0c0;">🚫 Hall dos Desclassificados</div>
+        <div class="rebaixado"><span>Geovanna</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Iohanni</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Vitoria</span><strong>Desclassificada</strong></div>
+      </div>
+ 
       <div class="paredao" id="paredao-outubro">
         <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
@@ -751,20 +909,20 @@ body{
       <div class="chart-wrap"><canvas id="chart-outubro"></canvas></div>
     </div>
   </div>
-
+ 
   <!-- ===== NOVEMBRO (ABERTO) ===== -->
   <div class="tab-panel" id="panel-novembro">
     <div class="section">
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — NOVEMBRO</div>
         <div class="meta-value" id="metaValor-novembro">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-novembro">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-novembro">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-novembro" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Editar comissões</div>
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
       <div class="input-row" id="inputs-novembro"></div>
-      <button class="update-btn" onclick="atualizar('novembro')">Atualizar ranking</button>
+      <button class="update-btn" onclick="atualizar('novembro')">Registrar vendas</button>
     </div>
     <div class="section">
       <div class="section-label">Resumo do time</div>
@@ -776,6 +934,18 @@ body{
     </div>
     <div class="section">
       <div class="section-label">Paredão ☠️</div>
+ 
+      <div class="paredao" style="
+        margin-top:12px;
+        background:rgba(120,120,120,.08);
+        border:1px solid rgba(180,180,180,.25);
+      ">
+        <div class="paredao-title" style="color:#c0c0c0;">🚫 Hall dos Desclassificados</div>
+        <div class="rebaixado"><span>Geovanna</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Iohanni</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Vitoria</span><strong>Desclassificada</strong></div>
+      </div>
+ 
       <div class="paredao" id="paredao-novembro">
         <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
@@ -785,20 +955,20 @@ body{
       <div class="chart-wrap"><canvas id="chart-novembro"></canvas></div>
     </div>
   </div>
-
+ 
   <!-- ===== DEZEMBRO (ABERTO) ===== -->
   <div class="tab-panel" id="panel-dezembro">
     <div class="section">
       <div class="meta-equipe">
         <div class="meta-title">META DA EQUIPE — DEZEMBRO</div>
         <div class="meta-value" id="metaValor-dezembro">R$ 0,00</div>
-        <div class="meta-sub">Objetivo da equipe: R$ 30.000 pagos</div>
+        <div class="meta-sub" id="metaSub-dezembro">Objetivo da equipe: R$ 30.000 pagos</div>
         <div class="meta-percent" id="metaPct-dezembro">0% concluído</div>
         <div class="meta-bar"><div class="meta-bar-fill" id="metaBar-dezembro" style="width:0%"></div></div>
       </div>
-      <div class="section-label" style="margin-top:1.5rem;">Editar comissões</div>
+      <div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>
       <div class="input-row" id="inputs-dezembro"></div>
-      <button class="update-btn" onclick="atualizar('dezembro')">Atualizar ranking</button>
+      <button class="update-btn" onclick="atualizar('dezembro')">Registrar vendas</button>
     </div>
     <div class="section">
       <div class="section-label">Resumo do time</div>
@@ -810,6 +980,18 @@ body{
     </div>
     <div class="section">
       <div class="section-label">Paredão ☠️</div>
+ 
+      <div class="paredao" style="
+        margin-top:12px;
+        background:rgba(120,120,120,.08);
+        border:1px solid rgba(180,180,180,.25);
+      ">
+        <div class="paredao-title" style="color:#c0c0c0;">🚫 Hall dos Desclassificados</div>
+        <div class="rebaixado"><span>Geovanna</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Iohanni</span><strong>Desclassificada</strong></div>
+        <div class="rebaixado"><span>Vitoria</span><strong>Desclassificada</strong></div>
+      </div>
+ 
       <div class="paredao" id="paredao-dezembro">
         <div class="paredao-title">☠️ Menor desempenho do mês</div>
       </div>
@@ -819,10 +1001,10 @@ body{
       <div class="chart-wrap"><canvas id="chart-dezembro"></canvas></div>
     </div>
   </div>
-
+ 
   <!-- ===== RODÍZIO DE LEADS ===== -->
   <div class="tab-panel" id="panel-rodizio">
-
+ 
     <!-- Dashboard Cards -->
     <div class="rod-dashboard">
       <div class="rod-card">
@@ -850,8 +1032,18 @@ body{
         <div class="rod-card-val" id="rod-env">0</div>
         <div class="rod-card-label">Enviados p/ Rodízio</div>
       </div>
+      <div class="rod-card rod-whats">
+        <div class="rod-card-icon">📱</div>
+        <div class="rod-card-val" id="rod-origem-whats">0</div>
+        <div class="rod-card-label">Vindos do WhatsApp</div>
+      </div>
+      <div class="rod-card rod-api">
+        <div class="rod-card-icon">🔌</div>
+        <div class="rod-card-val" id="rod-origem-api">0</div>
+        <div class="rod-card-label">Vindos da API</div>
+      </div>
     </div>
-
+ 
     <!-- Formulário de Cadastro -->
     <div class="rod-section">
       <div class="rod-form-title">➕ Cadastrar Novo Lead</div>
@@ -870,9 +1062,15 @@ body{
             <option value="">Selecione...</option>
             <option>Ana</option>
             <option>Isabelly</option>
-            <option>Vitoria</option>
-            <option>Iohanni</option>
             <option>Keth</option>
+          </select>
+        </div>
+        <div class="rod-field">
+          <label>Origem do Lead</label>
+          <select id="rod-inp-origem">
+            <option value="">Selecione...</option>
+            <option value="whatsapp">📱 WhatsApp</option>
+            <option value="api">🔌 API WhatsApp</option>
           </select>
         </div>
         <div class="rod-field rod-field-full">
@@ -883,7 +1081,7 @@ body{
       <button class="rod-btn-add" onclick="rodAdicionarLead()">➕ Cadastrar Lead</button>
       <div class="rod-msg" id="rod-msg"></div>
     </div>
-
+ 
     <!-- Filtros -->
     <div class="rod-section">
       <div class="rod-form-title">🔍 Filtros</div>
@@ -894,9 +1092,16 @@ body{
             <option value="">Todas</option>
             <option>Ana</option>
             <option>Isabelly</option>
-            <option>Vitoria</option>
-            <option>Iohanni</option>
             <option>Keth</option>
+ 
+          </select>
+        </div>
+        <div class="rod-field">
+          <label>Origem</label>
+          <select id="rod-fil-origem" onchange="rodRenderTabela()">
+            <option value="">Todas</option>
+            <option value="whatsapp">📱 WhatsApp</option>
+            <option value="api">🔌 API WhatsApp</option>
           </select>
         </div>
         <div class="rod-field">
@@ -919,7 +1124,7 @@ body{
         </div>
       </div>
     </div>
-
+ 
     <!-- Tabela de Leads -->
     <div class="rod-section">
       <div class="rod-form-title">📋 Leads Cadastrados</div>
@@ -930,6 +1135,7 @@ body{
               <th>Nome</th>
               <th>Telefone</th>
               <th>Vendedora</th>
+              <th>Origem</th>
               <th>Data Entrada</th>
               <th>Dias</th>
               <th>Status</th>
@@ -937,29 +1143,281 @@ body{
             </tr>
           </thead>
           <tbody id="rod-tbody">
-            <tr><td colspan="7" class="rod-empty">Nenhum lead cadastrado ainda.</td></tr>
+            <tr><td colspan="8" class="rod-empty">Nenhum lead cadastrado ainda.</td></tr>
           </tbody>
         </table>
       </div>
     </div>
-
+ 
   </div><!-- /panel-rodizio -->
-
+ 
+  <!-- ===== USUÁRIOS (ADMIN) ===== -->
+  <div class="tab-panel" id="panel-usuarios">
+ 
+    <div class="rod-section">
+      <div class="rod-form-title">➕ Adicionar Usuário Admin</div>
+      <div class="rod-form-grid">
+        <div class="rod-field">
+          <label>Usuário</label>
+          <input type="text" id="admin-inp-user" placeholder="Ex: joana" autocomplete="off">
+        </div>
+        <div class="rod-field">
+          <label>Senha</label>
+          <input type="text" id="admin-inp-pass" placeholder="Senha" autocomplete="off">
+        </div>
+      </div>
+      <button class="rod-btn-add" onclick="adminAdicionar()">➕ Adicionar Usuário</button>
+      <div class="rod-msg" id="admin-msg"></div>
+    </div>
+ 
+    <div class="rod-section">
+      <div class="rod-form-title">👥 Usuários com Acesso</div>
+      <div class="rod-table-wrap">
+        <table class="rod-table" id="admin-table">
+          <thead>
+            <tr><th>Usuário</th><th>Ações</th></tr>
+          </thead>
+          <tbody id="admin-tbody">
+            <tr><td colspan="2" class="rod-empty">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+ 
+  </div><!-- /panel-usuarios -->
+ 
+  <!-- ===== PAINEL ADMINISTRATIVO ===== -->
+  <div class="tab-panel" id="panel-painel-admin">
+ 
+    <!-- Setup de primeiro acesso (só aparece se ainda não existe admin) -->
+    <div class="admin-setup-box" id="admin-setup-box" style="display:none">
+      <strong>Primeiro acesso:</strong> ainda não existe nenhum administrador cadastrado neste sistema.
+      A primeira conta que você criar na tela de login ("Sou administrador") se torna automaticamente
+      a única administradora, com permissão real no Firebase — depois disso, mais ninguém consegue
+      se cadastrar como admin por conta própria.
+    </div>
+ 
+    <div class="admin-subtabs">
+      <button class="admin-subtab-btn active" id="asub-dashboard"   onclick="switchAdminSub('dashboard')">📊 Dashboard</button>
+      <button class="admin-subtab-btn"        id="asub-integrantes" onclick="switchAdminSub('integrantes')">👥 Integrantes</button>
+      <button class="admin-subtab-btn"        id="asub-vendas"      onclick="switchAdminSub('vendas')">💰 Vendas</button>
+      <button class="admin-subtab-btn"        id="asub-metas"       onclick="switchAdminSub('metas')">🎯 Metas</button>
+      <button class="admin-subtab-btn"        id="asub-meses"       onclick="switchAdminSub('meses')">🗓️ Meses</button>
+      <button class="admin-subtab-btn"        id="asub-config"      onclick="switchAdminSub('config')">⚙️ Configurações</button>
+    </div>
+ 
+    <!-- Dashboard -->
+    <div class="admin-subpanel active" id="apanel-dashboard">
+      <div class="rod-dashboard" id="admin-dash-cards"></div>
+      <div class="rod-section">
+        <div class="rod-form-title">📈 Resumo do mês selecionado</div>
+        <div class="rod-field" style="max-width:220px;margin-bottom:14px;">
+          <label>Mês</label>
+          <select id="admin-dash-mes" onchange="renderAdminDashboard()"></select>
+        </div>
+        <div class="rod-table-wrap">
+          <table class="rod-table">
+            <thead><tr><th>Integrante</th><th>Total no mês</th><th>Meta individual</th><th>%</th></tr></thead>
+            <tbody id="admin-dash-tbody"><tr><td colspan="4" class="rod-empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Integrantes -->
+    <div class="admin-subpanel" id="apanel-integrantes">
+      <div class="rod-section">
+        <div class="rod-form-title">➕ Adicionar Integrante</div>
+        <div class="rod-form-grid">
+          <div class="rod-field">
+            <label>Nome do integrante</label>
+            <input type="text" id="admin-inp-membro-nome" placeholder="Ex: Camila" autocomplete="off">
+          </div>
+        </div>
+        <button class="rod-btn-add" onclick="uiAdicionarMembro()">➕ Adicionar</button>
+        <div class="rod-msg" id="admin-membro-msg"></div>
+      </div>
+      <div class="rod-section">
+        <div class="rod-form-title">👥 Integrantes cadastrados</div>
+        <div class="rod-table-wrap">
+          <table class="rod-table">
+            <thead><tr><th>Nome</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="admin-membros-tbody"><tr><td colspan="3" class="rod-empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Vendas -->
+    <div class="admin-subpanel" id="apanel-vendas">
+      <div class="rod-section">
+        <div class="rod-form-title">➕ Lançar / corrigir venda</div>
+        <div class="rod-form-grid">
+          <div class="rod-field">
+            <label>Mês</label>
+            <select id="admin-venda-mes"></select>
+          </div>
+          <div class="rod-field">
+            <label>Integrante</label>
+            <select id="admin-venda-membro"></select>
+          </div>
+          <div class="rod-field">
+            <label>Valor (R$)</label>
+            <input type="number" id="admin-venda-valor" step="0.01" placeholder="0,00">
+          </div>
+          <div class="rod-field">
+            <label>Data</label>
+            <input type="date" id="admin-venda-data">
+          </div>
+          <div class="rod-field rod-field-full">
+            <label>Observação</label>
+            <input type="text" id="admin-venda-obs" placeholder="Ex: correção, ajuste, venda avulsa...">
+          </div>
+        </div>
+        <button class="rod-btn-add" onclick="uiAdminAdicionarVenda()">➕ Lançar venda</button>
+        <div class="rod-msg" id="admin-venda-msg"></div>
+      </div>
+ 
+      <div class="rod-section">
+        <div class="rod-form-title">✏️ Ajustar total diretamente</div>
+        <div class="rod-form-grid">
+          <div class="rod-field">
+            <label>Mês</label>
+            <select id="admin-ajuste-mes"></select>
+          </div>
+          <div class="rod-field">
+            <label>Integrante</label>
+            <select id="admin-ajuste-membro" onchange="uiAtualizarTotalAtual()"></select>
+          </div>
+          <div class="rod-field">
+            <label>Novo total (R$)</label>
+            <input type="number" id="admin-ajuste-valor" step="0.01" placeholder="0,00">
+          </div>
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:8px;">
+          Total atual: <strong id="admin-ajuste-atual" style="color:#ffd86a;">R$ 0,00</strong> —
+          ao salvar, o sistema lança automaticamente uma venda de ajuste com a diferença, sem apagar o histórico.
+        </div>
+        <button class="rod-btn-add" onclick="uiAdminAjustarTotal()">💾 Salvar novo total</button>
+        <div class="rod-msg" id="admin-ajuste-msg"></div>
+      </div>
+ 
+      <div class="rod-section">
+        <div class="rod-form-title">🔍 Filtros</div>
+        <div class="rod-filtros-grid">
+          <div class="rod-field">
+            <label>Mês</label>
+            <select id="admin-vfil-mes" onchange="renderAdminVendas()"></select>
+          </div>
+          <div class="rod-field">
+            <label>Integrante</label>
+            <select id="admin-vfil-membro" onchange="renderAdminVendas()"></select>
+          </div>
+        </div>
+      </div>
+ 
+      <div class="rod-section">
+        <div class="rod-form-title">📋 Vendas lançadas</div>
+        <div class="rod-table-wrap">
+          <table class="rod-table">
+            <thead><tr><th>Data</th><th>Integrante</th><th>Valor</th><th>Obs.</th><th>Ações</th></tr></thead>
+            <tbody id="admin-vendas-tbody"><tr><td colspan="5" class="rod-empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;font-size:13px;color:#bbb;">Total filtrado: <strong id="admin-vendas-total" style="color:#ffd86a;">R$ 0,00</strong></div>
+      </div>
+    </div>
+ 
+    <!-- Metas -->
+    <div class="admin-subpanel" id="apanel-metas">
+      <div class="rod-section">
+        <div class="rod-field" style="max-width:220px;margin-bottom:14px;">
+          <label>Mês</label>
+          <select id="admin-metas-mes" onchange="renderAdminMetas()"></select>
+        </div>
+ 
+        <div class="rod-form-title">🎯 Meta da equipe</div>
+        <div class="meta-edit-row">
+          <input type="number" id="admin-meta-equipe" step="0.01" placeholder="0,00">
+          <button class="rod-btn-add" style="margin-top:0" onclick="uiSalvarMetaEquipe()">💾 Salvar</button>
+        </div>
+        <div class="rod-msg" id="admin-meta-equipe-msg"></div>
+      </div>
+ 
+      <div class="rod-section">
+        <div class="rod-form-title">🎯 Metas individuais</div>
+        <div class="rod-table-wrap">
+          <table class="rod-table">
+            <thead><tr><th>Integrante</th><th>Meta individual (R$)</th><th></th></tr></thead>
+            <tbody id="admin-metas-tbody"><tr><td colspan="3" class="rod-empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Meses -->
+    <div class="admin-subpanel" id="apanel-meses">
+      <div class="rod-section">
+        <div class="rod-form-title">➕ Criar novo mês</div>
+        <div class="rod-form-grid">
+          <div class="rod-field">
+            <label>Identificador (sem espaços/acentos)</label>
+            <input type="text" id="admin-novo-mes-id" placeholder="Ex: janeiro2027">
+          </div>
+          <div class="rod-field">
+            <label>Nome exibido</label>
+            <input type="text" id="admin-novo-mes-label" placeholder="Ex: Janeiro/2027">
+          </div>
+        </div>
+        <button class="rod-btn-add" onclick="uiCriarMes()">➕ Criar mês</button>
+        <div class="rod-msg" id="admin-mes-msg"></div>
+      </div>
+      <div class="rod-section">
+        <div class="rod-form-title">🗓️ Meses do ranking</div>
+        <div class="rod-table-wrap">
+          <table class="rod-table">
+            <thead><tr><th>Mês</th><th>Nome exibido</th><th>Status</th><th>Ações</th></tr></thead>
+            <tbody id="admin-meses-tbody"><tr><td colspan="4" class="rod-empty">Carregando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+ 
+    <!-- Configurações -->
+    <div class="admin-subpanel" id="apanel-config">
+      <div class="rod-section">
+        <div class="rod-form-title">🔎 Dados brutos salvos no Firebase</div>
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">Somente leitura — útil para conferência.</div>
+        <pre id="admin-raw-json" style="background:#111;border:1px solid #333;border-radius:10px;padding:14px;font-size:11px;color:#9fd89f;overflow:auto;max-height:340px;white-space:pre-wrap;"></pre>
+        <button class="rod-btn-add" onclick="renderAdminConfigRaw()">🔄 Atualizar visualização</button>
+      </div>
+      <div class="rod-section">
+        <div class="rod-form-title">🛡️ Sobre o acesso de administrador</div>
+        <div style="font-size:13px;color:#bbb;line-height:1.6;">
+          O acesso ao Painel Admin é controlado por login real do Firebase Authentication e por regras
+          de segurança no Realtime Database — não é apenas um botão escondido. Veja o arquivo de regras
+          e o guia de publicação entregues junto com este projeto para detalhes de como isso é aplicado.
+        </div>
+      </div>
+    </div>
+ 
+  </div><!-- /panel-painel-admin -->
+ 
 </div>
-
+ 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 const META        = 800;
 const META_EQUIPE = 30000;
 const META_IPHONE = 30000000;
-
+ 
 /* ── Dados fixos ──────────────────────────────────── */
-const dadosAbril = [
+const defaultAbril = [
   {nome:'Isabelly', comissao:1325.25},
   {nome:'Vitoria',  comissao:490.00},
   {nome:'Iohanni',  comissao:459.13}
 ];
-
+ 
 const defaultMaio = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:1028.77},
@@ -967,7 +1425,7 @@ const defaultMaio = [
   {nome:'Iohanni',  comissao:15.36},
   {nome:'Keth',     comissao:295.83}
 ];
-
+ 
 const defaultJunho = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:915.64},
@@ -978,46 +1436,35 @@ const defaultJunho = [
 const defaultJulho = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
 ];
 const defaultAgosto = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
 ];
 const defaultSetembro = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
+ 
 ];
 const defaultOutubro = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
 ];
 const defaultNovembro = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
 ];
 const defaultDezembro = [
   {nome:'Ana', comissao:0},
   {nome:'Isabelly', comissao:0},
-  {nome:'Vitoria', comissao:0},
-  {nome:'Iohanni', comissao:0},
   {nome:'Keth', comissao:0}
 ];
-
+ 
 /* ── localStorage helpers ─────────────────────────── */
 function carregar(mes, def){
   // Dados vêm do Firebase via fbEscutar (definido no <script type="module">)
@@ -1028,9 +1475,10 @@ function salvar(mes, dadosMes){
   // Salva no Firebase — visível para todos em tempo real
   if(window.fbSalvar) window.fbSalvar('ranking/'+mes, dadosMes);
 }
-
+ 
 /* ── Estado em memória ────────────────────────────── */
 const dados = {
+  abril: carregar('abril', defaultAbril),
   maio:  carregar('maio',  defaultMaio),
   junho: carregar('junho', defaultJunho),
   julho: carregar('julho', defaultJulho),
@@ -1040,9 +1488,9 @@ const dados = {
   novembro: carregar('novembro', defaultNovembro),
   dezembro: carregar('dezembro', defaultDezembro)
 };
-
+ 
 const charts = {};
-
+ 
 /* ── Tabs ─────────────────────────────────────────── */
 const tabNomes = {
   abril:'Abril',maio:'Maio',junho:'Junho',julho:'Julho',agosto:'Agosto',
@@ -1058,7 +1506,7 @@ function switchTab(tab){
   document.getElementById('headerSubtitle').textContent =
     tabNomes[tab]+' • Meta: R$ 800,00';
 }
-
+ 
 /* ── Atualizar (junho) ────────────────────────────── */
 function atualizar(mes){
   dados[mes].forEach((v,i)=>{
@@ -1069,7 +1517,7 @@ function atualizar(mes){
   renderMes(mes);
   renderCampanhaIphone();
 }
-
+ 
 /* ── Render mês ativo (junho) ─────────────────────── */
 function buildInputs(mes){
   const el = document.getElementById('inputs-'+mes);
@@ -1080,7 +1528,7 @@ function buildInputs(mes){
       <input type="number" id="inp-${mes}-${i}" value="${v.comissao}" min="0" step="0.01">
     </div>`).join('');
 }
-
+ 
 function renderMes(mes){
   const lista   = dados[mes];
   const sorted  = [...lista].sort((a,b)=>b.comissao-a.comissao);
@@ -1088,12 +1536,12 @@ function renderMes(mes){
   const pctEq   = (total/META_EQUIPE)*100;
   const bateram = lista.filter(v=>v.comissao>=META).length;
   const emojis  = ['🥇','🥈','🥉'];
-
+ 
   // meta equipe
   set('metaValor-'+mes, 'R$ '+fmt(total));
   set('metaPct-'+mes,   pctEq.toFixed(2)+'% concluído');
   style('metaBar-'+mes, 'width', Math.min(pctEq,100)+'%');
-
+ 
   // métricas (só junho tem este bloco)
   const mEl = document.getElementById('metrics-'+mes);
   if(mEl) mEl.innerHTML = `
@@ -1105,7 +1553,7 @@ function renderMes(mes){
       <div class="metric-label">Bateram a meta</div>
       <div class="metric-value">${bateram}/${lista.length}</div>
     </div>`;
-
+ 
   // ranking
   set('ranking-'+mes, sorted.map((v,i)=>{
     const pct    = Math.round((v.comissao/META)*100);
@@ -1126,7 +1574,7 @@ function renderMes(mes){
       </div>
     </div>`;
   }).join(''));
-
+ 
   // paredão
   const sortAsc = [...lista].sort((a,b)=>a.comissao-b.comissao);
   const pEl = document.getElementById('paredao-'+mes);
@@ -1137,11 +1585,11 @@ function renderMes(mes){
         <span>${v.nome}</span>
         <strong>R$ ${fmt(v.comissao)}</strong>
       </div>`).join('');
-
+ 
   // gráfico
   renderChart(mes, sorted);
 }
-
+ 
 /* ── Gráfico genérico ─────────────────────────────── */
 function renderChart(mes, sorted){
   const ctx = document.getElementById('chart-'+mes);
@@ -1182,61 +1630,16 @@ function renderChart(mes, sorted){
     }
   });
 }
-
-/* ── Gráfico Abril (estático) ─────────────────────── */
-function renderChartAbril(){
-  const sorted = [...dadosAbril].sort((a,b)=>b.comissao-a.comissao);
-  renderChartStatic('abril', sorted);
-}
-function renderChartStatic(mes, sorted){
-  const ctx = document.getElementById('chart-'+mes);
-  if(!ctx) return;
-  if(charts[mes]) charts[mes].destroy();
-  charts[mes] = new Chart(ctx,{
-    type:'bar',
-    data:{
-      labels: sorted.map(v=>v.nome),
-      datasets:[{
-        label:'Comissão (R$)',
-        data: sorted.map(v=>v.comissao),
-        backgroundColor:'rgba(184,151,42,0.6)',
-        borderColor:'#ffd86a',
-        borderWidth:1
-      },{
-        type:'line',
-        label:'Meta (R$ '+fmt(META)+')',
-        data: sorted.map(()=>META),
-        borderColor:'#e05555',
-        borderWidth:2,
-        borderDash:[6,4],
-        pointRadius:0,
-        fill:false
-      }]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{
-        legend:{labels:{color:'#ffd86a'}},
-        tooltip:{callbacks:{label:ctx=>'R$ '+fmt(ctx.parsed.y)}}
-      },
-      scales:{
-        x:{ticks:{color:'#ffd86a'},grid:{color:'rgba(255,255,255,0.05)'}},
-        y:{ticks:{color:'#ffd86a',callback:v=>'R$ '+fmt(v)},grid:{color:'rgba(255,255,255,0.05)'}}
-      }
-    }
-  });
-}
-
+ 
 /* ── Campanha iPhone ──────────────────────────────── */
 function renderCampanhaIphone(){
-  const tAbril  = dadosAbril.reduce((s,v)=>s+v.comissao,0);
+  const tAbril  = dados.abril.reduce((s,v)=>s+v.comissao,0);
   const tMaio   = dados.maio.reduce((s,v)=>s+v.comissao,0);
   const tJunho  = dados.junho.reduce((s,v)=>s+v.comissao,0);
   const total   = tAbril+tMaio+tJunho;
   const faltam  = META_IPHONE-total;
   const pct     = (total/META_IPHONE)*100;
-
+ 
   document.getElementById('campanhaIphone').innerHTML = `
     <div style="font-size:18px;font-weight:700;color:#ffd86a;">📱 Campanha iPhone</div>
     <div style="margin-top:8px;color:#bbb;">Acumulado geral da campanha</div>
@@ -1256,112 +1659,28 @@ function renderCampanhaIphone(){
       Faltam <strong>R$ ${fmt(faltam)}</strong> para o prêmio.
     </div>`;
 }
-
-/* ── Render Maio (somente leitura) ────────────────── */
-function renderMaioReadonly(){
-  const lista  = dados.maio;
-  const sorted = [...lista].sort((a,b)=>b.comissao-a.comissao);
-  const total  = lista.reduce((s,v)=>s+v.comissao,0);
-  const pctEq  = (total/META_EQUIPE)*100;
-  const emojis = ['🥇','🥈','🥉'];
-
-  set('metaValor-maio', 'R$ '+fmt(total));
-  set('metaPct-maio',   pctEq.toFixed(2)+'% concluído');
-  style('metaBar-maio','width', Math.min(pctEq,100)+'%');
-
-  set('ranking-maio', sorted.map((v,i)=>{
-    const pct    = Math.round((v.comissao/META)*100);
-    const atingiu= pct>=100;
-    const badge  = i<3 ? emojis[i] : (i+1)+'º';
-    return `
-    <div class="rank-item ${i===0?'primeiro':''}">
-      <div class="rank-badge">${badge}</div>
-      <div class="rank-name">${v.nome}</div>
-      <div class="rank-values">
-        <div>R$ ${fmt(v.comissao)}</div>
-        <div class="rank-pct ${atingiu?'atingiu':pct>=80?'ouro':''}">
-          ${pct}% ${atingiu?'✓ Meta atingida':'da meta'}
-        </div>
-      </div>
-      <div class="bar-wrap">
-        <div class="bar-fill ${atingiu?'verde':'ouro'}" style="width:${Math.min(pct,100)}%"></div>
-      </div>
-    </div>`;
-  }).join(''));
-
-  const sortAsc = [...lista].sort((a,b)=>a.comissao-b.comissao);
-  const pEl = document.getElementById('paredao-maio');
-  if(pEl) pEl.innerHTML =
-    '<div class="paredao-title">☠️ Menor desempenho do mês</div>'+
-    sortAsc.slice(0,2).map(v=>`
-      <div class="rebaixado"><span>${v.nome}</span><strong>R$ ${fmt(v.comissao)}</strong></div>`).join('');
-
-  renderChartStatic('maio', sorted);
-}
-
-/* ── Render Junho (somente leitura) ───────────────── */
-function renderJunhoReadonly(){
-  const lista  = dados.junho;
-  const sorted = [...lista].sort((a,b)=>b.comissao-a.comissao);
-  const total  = lista.reduce((s,v)=>s+v.comissao,0);
-  const pctEq  = (total/META_EQUIPE)*100;
-  const emojis = ['🥇','🥈','🥉'];
-
-  set('metaValor-junho', 'R$ '+fmt(total));
-  set('metaPct-junho',   pctEq.toFixed(2)+'% concluído');
-  style('metaBar-junho','width', Math.min(pctEq,100)+'%');
-
-  set('ranking-junho', sorted.map((v,i)=>{
-    const pct    = Math.round((v.comissao/META)*100);
-    const atingiu= pct>=100;
-    const badge  = i<3 ? emojis[i] : (i+1)+'º';
-    return `
-    <div class="rank-item ${i===0?'primeiro':''}">
-      <div class="rank-badge">${badge}</div>
-      <div class="rank-name">${v.nome}</div>
-      <div class="rank-values">
-        <div>R$ ${fmt(v.comissao)}</div>
-        <div class="rank-pct ${atingiu?'atingiu':pct>=80?'ouro':''}">
-          ${pct}% ${atingiu?'✓ Meta atingida':'da meta'}
-        </div>
-      </div>
-      <div class="bar-wrap">
-        <div class="bar-fill ${atingiu?'verde':'ouro'}" style="width:${Math.min(pct,100)}%"></div>
-      </div>
-    </div>`;
-  }).join(''));
-
-  const sortAsc = [...lista].sort((a,b)=>a.comissao-b.comissao);
-  const pEl = document.getElementById('paredao-junho');
-  if(pEl) pEl.innerHTML =
-    '<div class="paredao-title">☠️ Menor desempenho do mês</div>'+
-    sortAsc.slice(0,2).map(v=>`
-      <div class="rebaixado"><span>${v.nome}</span><strong>R$ ${fmt(v.comissao)}</strong></div>`).join('');
-
-  renderChartStatic('junho', sorted);
-}
-
+ 
 /* ── Helpers DOM ──────────────────────────────────── */
 function set(id,html){ const e=document.getElementById(id); if(e) e.innerHTML=html; }
 function style(id,prop,val){ const e=document.getElementById(id); if(e) e.style[prop]=val; }
 function fmt(v){
   return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
-
+ 
 /* ── Login ────────────────────────────────────────── */
-const USUARIOS = {
+let USUARIOS = {
   'pamela1':   '1010',
   'stephanie': '1013',
   'marina':    '1014'
 };
-
+ 
 let modoVisitante = false;
-
+ 
 function tentarLogin(){
   const user = document.getElementById('login-user').value.trim().toLowerCase();
   const pass = document.getElementById('login-pass').value.trim();
   const err  = document.getElementById('login-err');
-
+ 
   if(USUARIOS[user] && USUARIOS[user] === pass){
     document.getElementById('login-overlay').style.display = 'none';
     const badge = document.getElementById('user-badge');
@@ -1369,20 +1688,22 @@ function tentarLogin(){
     badge.style.display = 'block';
     modoVisitante = false;
     document.getElementById('tab-rodizio').style.display = 'inline-block'; // ✅ mostra aba
+    document.getElementById('tab-usuarios').style.display = 'inline-block'; // ✅ mostra aba
   } else {
     err.textContent = '❌ Usuário ou senha incorretos.';
     document.getElementById('login-pass').value = '';
   }
 }
-
+ 
 function entrarVisitante(){
   document.getElementById('login-overlay').style.display = 'none';
   document.getElementById('visitor-badge').style.display = 'block';
   modoVisitante = true;
   bloquearEdicao();
   document.getElementById('tab-rodizio').style.display = 'none'; // 🚫 oculta aba
+  document.getElementById('tab-usuarios').style.display = 'none'; // 🚫 oculta aba
 }
-
+ 
 function bloquearEdicao(){
   document.querySelectorAll('.inp-group input').forEach(el=>{
     el.disabled = true;
@@ -1396,7 +1717,7 @@ function bloquearEdicao(){
     el.title = 'Acesso restrito — faça login para editar';
   });
 }
-
+ 
 function logout(){
   document.getElementById('user-badge').style.display = 'none';
   document.getElementById('visitor-badge').style.display = 'none';
@@ -1405,23 +1726,28 @@ function logout(){
   document.getElementById('login-err').textContent = '';
   document.getElementById('login-overlay').style.display = 'flex';
   document.getElementById('tab-rodizio').style.display = 'none'; // 🚫 oculta aba ao sair
-  // Se estava na aba rodízio, volta para julho
-  if(document.getElementById('panel-rodizio')?.classList.contains('active')){
+  document.getElementById('tab-usuarios').style.display = 'none'; // 🚫 oculta aba ao sair
+  // Se estava numa aba restrita, volta para julho
+  if(document.getElementById('panel-rodizio')?.classList.contains('active') ||
+     document.getElementById('panel-usuarios')?.classList.contains('active')){
     switchTab('julho');
   }
   modoVisitante = false;
 }
-
+ 
 document.addEventListener('keydown', e=>{
   if(e.key==='Enter' && document.getElementById('login-overlay').style.display !== 'none'){
     tentarLogin();
   }
 });
-
+ 
 /* ── Init ─────────────────────────────────────────── */
-renderChartAbril();
-renderMaioReadonly();
-renderJunhoReadonly();
+buildInputs('abril');
+renderMes('abril');
+buildInputs('maio');
+renderMes('maio');
+buildInputs('junho');
+renderMes('junho');
 buildInputs('julho');
 renderMes('julho');
 buildInputs('agosto');
@@ -1435,17 +1761,18 @@ renderMes('novembro');
 buildInputs('dezembro');
 renderMes('dezembro');
 renderCampanhaIphone();
-
+adminRenderLista();
+ 
 /* ══════════════════════════════════════════════════
    RODÍZIO DE LEADS
 ══════════════════════════════════════════════════ */
-
+ 
 /* ── Patch switchTab to support 'rodizio' ── */
 (function(){
   const _orig = switchTab;
   window.switchTab = function(tab){
-    // Handle rodizio tab separately
-    const allTabs = ['abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro','rodizio'];
+    // Handle rodizio/usuarios tabs separately
+    const allTabs = ['abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro','rodizio','usuarios'];
     allTabs.forEach(t=>{
       const p = document.getElementById('panel-'+t);
       const b = document.getElementById('tab-'+t);
@@ -1455,12 +1782,15 @@ renderCampanhaIphone();
     if(tab==='rodizio'){
       document.getElementById('headerSubtitle').textContent = 'Rodízio de Leads • Controle de Atendimento';
       rodRenderTabela();
+    } else if(tab==='usuarios'){
+      document.getElementById('headerSubtitle').textContent = 'Usuários • Controle de Acesso';
+      adminRenderLista();
     } else {
       _orig(tab);
     }
   };
 })();
-
+ 
 /* ── Storage helpers ── */
 function rodCarregar(){
   // Dados vêm do Firebase via fbEscutar em tempo real
@@ -1471,7 +1801,7 @@ function rodSalvar(leads){
   // Salva no Firebase — visível para todos em tempo real
   if(window.fbSalvar) window.fbSalvar('rodizio/leads', leads);
 }
-
+ 
 /* ── Status calc ── */
 function rodStatusDados(lead){
   if(lead.enviado){
@@ -1482,56 +1812,58 @@ function rodStatusDados(lead){
   if(dias <= 7) return {key:'apto',   label:'🟡 Pode ir para Rodízio', cls:'rod-s-apto'};
   return            {key:'atras',  label:'🔴 Atrasado',              cls:'rod-s-atras'};
 }
-
+ 
 function rodDias(dataEntrada){
   const hoje   = new Date();
   const entrada= new Date(dataEntrada);
   const diff   = hoje - entrada;
   return Math.floor(diff / (1000*60*60*24));
 }
-
+ 
 function rodFmtData(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR');
 }
-
+ 
 /* ── Adicionar lead ── */
 function rodAdicionarLead(){
-  const nome  = document.getElementById('rod-inp-nome').value.trim();
-  const fone  = document.getElementById('rod-inp-fone').value.trim();
-  const vend  = document.getElementById('rod-inp-vend').value;
-  const obs   = document.getElementById('rod-inp-obs').value.trim();
-  const msg   = document.getElementById('rod-msg');
-
-  if(!nome || !fone || !vend){
+  const nome   = document.getElementById('rod-inp-nome').value.trim();
+  const fone   = document.getElementById('rod-inp-fone').value.trim();
+  const vend   = document.getElementById('rod-inp-vend').value;
+  const origem = document.getElementById('rod-inp-origem').value;
+  const obs    = document.getElementById('rod-inp-obs').value.trim();
+  const msg    = document.getElementById('rod-msg');
+ 
+  if(!nome || !fone || !vend || !origem){
     msg.style.color='#e05555';
-    msg.textContent='⚠️ Preencha Nome, Telefone e Vendedora.';
+    msg.textContent='⚠️ Preencha Nome, Telefone, Vendedora e Origem.';
     setTimeout(()=>msg.textContent='',3000);
     return;
   }
-
+ 
   const leads = rodCarregar();
   leads.unshift({
     id: Date.now(),
-    nome, fone, vend, obs,
+    nome, fone, vend, origem, obs,
     dataEntrada: new Date().toISOString(),
     enviado: false,
     dataEnvio: null
   });
   rodSalvar(leads);
-
+ 
   document.getElementById('rod-inp-nome').value='';
   document.getElementById('rod-inp-fone').value='';
   document.getElementById('rod-inp-vend').value='';
+  document.getElementById('rod-inp-origem').value='';
   document.getElementById('rod-inp-obs').value='';
-
+ 
   msg.style.color='#5ddd5d';
   msg.textContent='✅ Lead cadastrado com sucesso!';
   setTimeout(()=>msg.textContent='',3000);
-
+ 
   rodRenderTabela();
 }
-
+ 
 /* ── Enviar para Rodízio ── */
 function rodEnviar(id){
   const leads = rodCarregar();
@@ -1543,7 +1875,7 @@ function rodEnviar(id){
   rodSalvar(leads);
   rodRenderTabela();
 }
-
+ 
 /* ── Desfazer envio ── */
 function rodDesfazer(id){
   const leads = rodCarregar();
@@ -1554,7 +1886,7 @@ function rodDesfazer(id){
   rodSalvar(leads);
   rodRenderTabela();
 }
-
+ 
 /* ── Excluir lead ── */
 function rodExcluir(id){
   const leads = rodCarregar();
@@ -1565,17 +1897,24 @@ function rodExcluir(id){
   rodSalvar(novo);
   rodRenderTabela();
 }
-
+ 
+/* ── Origem do lead ── */
+function rodOrigemDados(origem){
+  if(origem==='api') return {label:'🔌 API WhatsApp', cls:'rod-origem-api'};
+  return {label:'📱 WhatsApp', cls:'rod-origem-whatsapp'};
+}
+ 
 /* ── Render tabela e dashboard ── */
 function rodRenderTabela(){
-  const todos  = rodCarregar();
+  const todos    = rodCarregar();
   const filVend  = document.getElementById('rod-fil-vend')?.value   || '';
+  const filOrigem= document.getElementById('rod-fil-origem')?.value || '';
   const filStatus= document.getElementById('rod-fil-status')?.value || '';
   const filNome  = (document.getElementById('rod-fil-nome')?.value  || '').toLowerCase();
   const filFone  = (document.getElementById('rod-fil-fone')?.value  || '').toLowerCase();
-
+ 
   // Dashboard counts
-  let cTotal=0,cAtend=0,cApto=0,cAtras=0,cEnv=0;
+  let cTotal=0,cAtend=0,cApto=0,cAtras=0,cEnv=0,cWhats=0,cApi=0;
   todos.forEach(l=>{
     cTotal++;
     const s = rodStatusDados(l).key;
@@ -1583,40 +1922,44 @@ function rodRenderTabela(){
     else if(s==='apto')   cApto++;
     else if(s==='atras')  cAtras++;
     else if(s==='enviado')cEnv++;
+    if(l.origem==='api') cApi++; else cWhats++;
   });
-  const sv=v=>{ const e=document.getElementById(v); if(e) e.textContent=eval('c'+v.split('-')[1].charAt(0).toUpperCase()+v.split('-')[1].slice(1)); };
   document.getElementById('rod-total').textContent = cTotal;
   document.getElementById('rod-atend').textContent = cAtend;
   document.getElementById('rod-apto').textContent  = cApto;
   document.getElementById('rod-atras').textContent = cAtras;
   document.getElementById('rod-env').textContent   = cEnv;
-
+  document.getElementById('rod-origem-whats').textContent = cWhats;
+  document.getElementById('rod-origem-api').textContent   = cApi;
+ 
   // Filter
   const filtrados = todos.filter(l=>{
     const s = rodStatusDados(l).key;
     if(filVend   && l.vend !== filVend) return false;
+    if(filOrigem && l.origem !== filOrigem) return false;
     if(filStatus && s !== filStatus)    return false;
     if(filNome   && !l.nome.toLowerCase().includes(filNome)) return false;
     if(filFone   && !l.fone.toLowerCase().includes(filFone)) return false;
     return true;
   });
-
+ 
   const tbody = document.getElementById('rod-tbody');
   if(!tbody) return;
-
+ 
   if(filtrados.length===0){
-    tbody.innerHTML='<tr><td colspan="7" class="rod-empty">Nenhum lead encontrado.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="8" class="rod-empty">Nenhum lead encontrado.</td></tr>';
     return;
   }
-
+ 
   tbody.innerHTML = filtrados.map(l=>{
     const st    = rodStatusDados(l);
+    const org   = rodOrigemDados(l.origem);
     const dias  = rodDias(l.dataEntrada);
     const rowCls= l.enviado ? 'rod-row-enviado' : '';
     const envBtn= l.enviado
-      ? `<button class="rod-btn-action" onclick="rodDesfazer(${l.id})" title="Desfazer envio">↩ Desfazer</button>`
+      ? `<button class="rod-btn-action" onclick="rodDesfazer(${l.id})" title="Desfazer envio">↩️ Desfazer</button>`
       : `<button class="rod-btn-action rod-btn-enviar" onclick="rodEnviar(${l.id})" title="Enviar para Rodízio">🔄 Rodízio</button>`;
-    const obs = l.obs ? `<br><span style="color:#666;font-size:11px">${l.obs}</span>` : '';
+    const obs = l.obs ? `<br><span style="color:#666;font-size:11px">${escHtml(l.obs)}</span>` : '';
     const dataEnvioInfo = l.enviado && l.dataEnvio
       ? `<br><span style="color:#7faeff;font-size:10px">Enviado em ${rodFmtData(l.dataEnvio)}</span>`:'';
     return `
@@ -1624,30 +1967,874 @@ function rodRenderTabela(){
       <td><strong style="color:#ffd86a">${escHtml(l.nome)}</strong>${obs}</td>
       <td>${escHtml(l.fone)}</td>
       <td>${escHtml(l.vend)}</td>
+      <td><span class="rod-origem ${org.cls}">${org.label}</span></td>
       <td>${rodFmtData(l.dataEntrada)}${dataEnvioInfo}</td>
       <td><span class="rod-dias-num" style="color:${dias<=4?'#5ddd5d':dias<=7?'#ffd86a':'#e05555'}">${dias}</span></td>
       <td><span class="rod-status ${st.cls}">${st.label}</span></td>
       <td>
         ${envBtn}
-        <button class="rod-btn-action rod-btn-del" onclick="rodExcluir(${l.id})" title="Excluir">🗑</button>
+        <button class="rod-btn-action rod-btn-del" onclick="rodExcluir(${l.id})" title="Excluir">🗑️</button>
       </td>
     </tr>`;
   }).join('');
 }
-
+ 
 function escHtml(t){
   return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
+ 
+/* ══════════════════════════════════════════════════
+   USUÁRIOS (ADMIN)
+══════════════════════════════════════════════════ */
+function adminSalvar(){
+  if(window.fbSalvar) window.fbSalvar('usuarios', USUARIOS);
+}
+ 
+function adminAdicionar(){
+  const user = document.getElementById('admin-inp-user').value.trim().toLowerCase();
+  const pass = document.getElementById('admin-inp-pass').value.trim();
+  const msg  = document.getElementById('admin-msg');
+ 
+  if(!user || !pass){
+    msg.style.color='#e05555';
+    msg.textContent='⚠️ Preencha usuário e senha.';
+    setTimeout(()=>msg.textContent='',3000);
+    return;
+  }
+ 
+  USUARIOS[user] = pass;
+  adminSalvar();
+ 
+  document.getElementById('admin-inp-user').value='';
+  document.getElementById('admin-inp-pass').value='';
+ 
+  msg.style.color='#5ddd5d';
+  msg.textContent='✅ Usuário adicionado com sucesso!';
+  setTimeout(()=>msg.textContent='',3000);
+ 
+  adminRenderLista();
+}
+ 
+function adminExcluir(user){
+  if(!confirm(`Excluir o usuário "${user}"? Ele não poderá mais fazer login.`)) return;
+  delete USUARIOS[user];
+  adminSalvar();
+  adminRenderLista();
+}
+ 
+function adminRenderLista(){
+  const tbody = document.getElementById('admin-tbody');
+  if(!tbody) return;
+  const nomes = Object.keys(USUARIOS);
+  if(nomes.length===0){
+    tbody.innerHTML = '<tr><td colspan="2" class="rod-empty">Nenhum usuário cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = nomes.map(u=>`
+    <tr>
+      <td><strong style="color:#ffd86a">${escHtml(u)}</strong></td>
+      <td><button class="rod-btn-action rod-btn-del" onclick="adminExcluir('${u}')" title="Excluir">🗑️ Excluir</button></td>
+    </tr>`).join('');
+}
+ 
 // Auto-refresh days every minute when rodizio is visible
 setInterval(()=>{
   if(document.getElementById('panel-rodizio')?.classList.contains('active')){
     rodRenderTabela();
   }
 }, 60000);
-
+ 
 // Initial render for dashboard counts
 rodRenderTabela();
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   PAINEL ADMINISTRATIVO — módulo adicional
+   Este bloco NÃO apaga nada do código acima. Ele:
+   - adiciona o novo modelo de dados (membros, metas, meses, vendas, admins)
+   - redefine buildInputs/renderMes/renderChart/atualizar/switchTab para
+     usarem esse novo modelo (a última definição de uma function no HTML
+     é a que vale, então isso substitui o comportamento com segurança)
+═══════════════════════════════════════════════════════════════════ */
+ 
+const MESES_FIXOS        = ['abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const META_IND_PADRAO    = 800;
+const META_EQUIPE_PADRAO = 30000;
+ 
+let MEMBROS       = undefined; // undefined = ainda não carregou; null = confirmado vazio; {} objeto = tem dados
+let METAS_MES     = {};
+let MESES_CONFIG  = undefined;
+let VENDAS_MES    = {};
+let ADMINS_MAP    = {};
+let authUserAtual = null;
+let souAdmin      = false;
+let jaMigrado     = {};
+ 
+function gerarId(){ return 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+ 
+/* ── Utilidades de mês ── */
+function todosOsMeses(){
+  const custom = MESES_CONFIG ? Object.keys(MESES_CONFIG).filter(m => MESES_CONFIG[m] && MESES_CONFIG[m].custom) : [];
+  return MESES_FIXOS.concat(custom);
+}
+function nomeDoMes(mes){
+  if(MESES_CONFIG && MESES_CONFIG[mes] && MESES_CONFIG[mes].label) return MESES_CONFIG[mes].label;
+  return tabNomes[mes] || mes;
+}
+function mesEstaAberto(mes){
+  if(MESES_CONFIG && MESES_CONFIG[mes] && typeof MESES_CONFIG[mes].aberto === 'boolean') return MESES_CONFIG[mes].aberto;
+  return true;
+}
+function metaEquipeDoMes(mes){
+  if(METAS_MES[mes] && typeof METAS_MES[mes].equipe === 'number') return METAS_MES[mes].equipe;
+  return META_EQUIPE_PADRAO;
+}
+function metaIndividualDoMembro(mes, membroId){
+  if(METAS_MES[mes] && METAS_MES[mes].individual && typeof METAS_MES[mes].individual[membroId] === 'number'){
+    return METAS_MES[mes].individual[membroId];
+  }
+  return META_IND_PADRAO;
+}
+ 
+/* ── Criação dinâmica do DOM de um mês novo (criado pelo admin) ── */
+function garantirPainelMes(mesId, label){
+  if(document.getElementById('panel-' + mesId)) return;
+  const tabsEl = document.querySelector('.tabs');
+  const btn = document.createElement('button');
+  btn.className = 'tab-btn';
+  btn.id = 'tab-' + mesId;
+  btn.textContent = label;
+  btn.onclick = function(){ switchTab(mesId); };
+  const refBtn = document.getElementById('tab-rodizio');
+  tabsEl.insertBefore(btn, refBtn || null);
+ 
+  const container = document.querySelector('.container');
+  const panel = document.createElement('div');
+  panel.className = 'tab-panel';
+  panel.id = 'panel-' + mesId;
+  panel.innerHTML =
+    '<div class="section">' +
+      '<div class="meta-equipe">' +
+        '<div class="meta-title">META DA EQUIPE — ' + escHtml(label).toUpperCase() + '</div>' +
+        '<div class="meta-value" id="metaValor-' + mesId + '">R$ 0,00</div>' +
+        '<div class="meta-sub" id="metaSub-' + mesId + '">Objetivo da equipe</div>' +
+        '<div class="meta-percent" id="metaPct-' + mesId + '">0% concluído</div>' +
+        '<div class="meta-bar"><div class="meta-bar-fill" id="metaBar-' + mesId + '" style="width:0%"></div></div>' +
+      '</div>' +
+      '<div class="section-label" style="margin-top:1.5rem;">Registrar vendas</div>' +
+      '<div class="input-row" id="inputs-' + mesId + '"></div>' +
+      '<button class="update-btn" onclick="atualizar(\'' + mesId + '\')">Registrar vendas</button>' +
+    '</div>' +
+    '<div class="section">' +
+      '<div class="section-label">Resumo do time</div>' +
+      '<div class="metrics-row" id="metrics-' + mesId + '"></div>' +
+    '</div>' +
+    '<div class="section">' +
+      '<div class="section-label">Ranking</div>' +
+      '<div class="ranking-list" id="ranking-' + mesId + '"></div>' +
+    '</div>' +
+    '<div class="section">' +
+      '<div class="section-label">Paredão ☠️</div>' +
+      '<div class="paredao" id="paredao-' + mesId + '"><div class="paredao-title">☠️ Menor desempenho do mês</div></div>' +
+    '</div>' +
+    '<div class="section">' +
+      '<div class="section-label">Comparativo em gráfico</div>' +
+      '<div class="chart-wrap"><canvas id="chart-' + mesId + '"></canvas></div>' +
+    '</div>';
+  const refPanel = document.getElementById('panel-rodizio');
+  container.insertBefore(panel, refPanel || null);
+  dados[mesId] = dados[mesId] || [];
+}
+function garantirTodosPaineis(){
+  if(!MESES_CONFIG) return;
+  Object.keys(MESES_CONFIG).forEach(mes=>{
+    if(MESES_CONFIG[mes] && MESES_CONFIG[mes].custom) garantirPainelMes(mes, MESES_CONFIG[mes].label || mes);
+  });
+}
+ 
+/* ── Fonte real dos números: soma de vendasDetalhe ── */
+function recomputeDadosMes(mes){
+  const membrosAtivos = MEMBROS ? Object.keys(MEMBROS).filter(id => MEMBROS[id] && MEMBROS[id].ativo !== false) : [];
+  const vendas = VENDAS_MES[mes] || {};
+  dados[mes] = membrosAtivos.map(id=>{
+    let total = 0;
+    Object.values(vendas).forEach(v=>{ if(v.membroId === id) total += Number(v.valor) || 0; });
+    return { id: id, nome: MEMBROS[id].nome, comissao: total };
+  });
+}
+function recomputeTudo(){
+  todosOsMeses().forEach(mes=>{
+    recomputeDadosMes(mes);
+    if(document.getElementById('inputs-' + mes)) buildInputs(mes);
+    if(document.getElementById('ranking-' + mes)) renderMes(mes);
+  });
+  if(typeof renderCampanhaIphone === 'function') renderCampanhaIphone();
+  if(souAdmin && document.getElementById('panel-painel-admin')) renderAdminAll();
+}
+ 
+/* ── Redefine buildInputs / atualizar / renderMes / renderChart ── */
+function buildInputs(mes){
+  const el = document.getElementById('inputs-' + mes);
+  if(!el) return;
+  const aberto = mesEstaAberto(mes);
+  el.innerHTML = (dados[mes] || []).map(v=>
+    '<div class="inp-group">' +
+      '<label>' + escHtml(v.nome) + ' <span style="color:#888;font-weight:400;">— total: R$ ' + fmt(v.comissao) + '</span></label>' +
+      '<input type="number" id="inp-' + mes + '-' + v.id + '" placeholder="Nova venda (R$)" min="0" step="0.01"' + (aberto ? '' : ' disabled style="opacity:.5"') + '>' +
+    '</div>'
+  ).join('');
+  const btn = document.querySelector('#panel-' + mes + ' > .section .update-btn');
+  if(btn){
+    btn.disabled = !aberto;
+    btn.style.opacity = aberto ? '' : '.4';
+    btn.title = aberto ? '' : 'Mês fechado para novos lançamentos';
+  }
+}
+ 
+function atualizar(mes){
+  if(!mesEstaAberto(mes)){
+    alert('Este mês está fechado para novos lançamentos. Peça para o administrador reabrir em Painel Admin → Meses.');
+    return;
+  }
+  const lista = dados[mes] || [];
+  let algumRegistrado = false;
+  lista.forEach(v=>{
+    const elx = document.getElementById('inp-' + mes + '-' + v.id);
+    if(!elx) return;
+    const valor = parseFloat(elx.value);
+    if(valor && valor > 0){
+      registrarVenda(mes, v.id, valor, '');
+      elx.value = '';
+      algumRegistrado = true;
+    }
+  });
+  if(!algumRegistrado) alert('Preencha o valor da venda de pelo menos um integrante.');
+}
+ 
+function registrarVenda(mes, membroId, valor, obs){
+  const chave = window.fbNovaChave ? window.fbNovaChave('vendasDetalhe/' + mes) : (Date.now() + '_' + Math.random().toString(36).slice(2));
+  const badgeNome = document.getElementById('user-badge-nome');
+  const registro = {
+    membroId: membroId,
+    valor: Number(valor) || 0,
+    data: new Date().toISOString(),
+    obs: obs || '',
+    criadoPor: (authUserAtual && authUserAtual.email) || (badgeNome ? badgeNome.textContent : 'vendedora'),
+    criadoEm: new Date().toISOString()
+  };
+  if(window.fbSalvar) window.fbSalvar('vendasDetalhe/' + mes + '/' + chave, registro);
+}
+ 
+function renderMes(mes){
+  const lista  = dados[mes] || [];
+  const sorted = [...lista].sort((a,b)=>b.comissao - a.comissao);
+  const total  = lista.reduce((s,v)=>s+v.comissao, 0);
+  const metaEq = metaEquipeDoMes(mes);
+  const pctEq  = metaEq > 0 ? (total / metaEq) * 100 : 0;
+  const bateram = lista.filter(v=>v.comissao >= metaIndividualDoMembro(mes, v.id)).length;
+  const emojis = ['🥇','🥈','🥉'];
+ 
+  set('metaValor-' + mes, 'R$ ' + fmt(total));
+  set('metaPct-' + mes, pctEq.toFixed(2) + '% concluído');
+  style('metaBar-' + mes, 'width', Math.min(pctEq,100) + '%');
+  set('metaSub-' + mes, 'Objetivo da equipe: R$ ' + fmt(metaEq) + ' pagos');
+ 
+  const mEl = document.getElementById('metrics-' + mes);
+  if(mEl) mEl.innerHTML =
+    '<div class="metric-card"><div class="metric-label">Total do time</div><div class="metric-value">R$ ' + fmt(total) + '</div></div>' +
+    '<div class="metric-card"><div class="metric-label">Bateram a meta</div><div class="metric-value">' + bateram + '/' + lista.length + '</div></div>';
+ 
+  set('ranking-' + mes, sorted.map((v,i)=>{
+    const metaInd = metaIndividualDoMembro(mes, v.id);
+    const pct = metaInd > 0 ? Math.round((v.comissao / metaInd) * 100) : 0;
+    const atingiu = pct >= 100;
+    const badge = i < 3 ? emojis[i] : (i+1) + 'º';
+    return '<div class="rank-item ' + (i===0?'primeiro':'') + '">' +
+      '<div class="rank-badge">' + badge + '</div>' +
+      '<div class="rank-name">' + escHtml(v.nome) + '</div>' +
+      '<div class="rank-values">' +
+        '<div>R$ ' + fmt(v.comissao) + '</div>' +
+        '<div class="rank-pct ' + (atingiu?'atingiu':(pct>=80?'ouro':'')) + '">' + pct + '% ' + (atingiu?'✓ Meta atingida':'da meta') + '</div>' +
+      '</div>' +
+      '<div class="bar-wrap"><div class="bar-fill ' + (atingiu?'verde':'ouro') + '" style="width:' + Math.min(pct,100) + '%"></div></div>' +
+    '</div>';
+  }).join(''));
+ 
+  const sortAsc = [...lista].sort((a,b)=>a.comissao - b.comissao);
+  const pEl = document.getElementById('paredao-' + mes);
+  if(pEl) pEl.innerHTML = '<div class="paredao-title">☠️ Menor desempenho do mês</div>' +
+    sortAsc.slice(0,2).map(v=>'<div class="rebaixado"><span>' + escHtml(v.nome) + '</span><strong>R$ ' + fmt(v.comissao) + '</strong></div>').join('');
+ 
+  renderChart(mes, sorted);
+}
+ 
+function renderChart(mes, sorted){
+  const ctx = document.getElementById('chart-' + mes);
+  if(!ctx || typeof Chart === 'undefined') return;
+  if(charts[mes]) charts[mes].destroy();
+  charts[mes] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: sorted.map(v=>v.nome),
+      datasets: [{
+        label: 'Total (R$)',
+        data: sorted.map(v=>v.comissao),
+        backgroundColor: 'rgba(184,151,42,0.6)',
+        borderColor: '#ffd86a',
+        borderWidth: 1
+      },{
+        type: 'line',
+        label: 'Meta individual',
+        data: sorted.map(v=>metaIndividualDoMembro(mes, v.id)),
+        borderColor: '#e05555',
+        borderWidth: 2,
+        borderDash: [6,4],
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#ffd86a' } }, tooltip: { callbacks: { label: c => 'R$ ' + fmt(c.parsed.y) } } },
+      scales: {
+        x: { ticks: { color: '#ffd86a' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#ffd86a', callback: v => 'R$ ' + fmt(v) }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+ 
+/* ── switchTab consolidado (meses fixos + custom + rodízio + usuários + painel admin) ── */
+function switchTab(tab){
+  const all = todosOsMeses().concat(['rodizio','usuarios','painel-admin']);
+  all.forEach(t=>{
+    const p = document.getElementById('panel-' + t);
+    const b = document.getElementById('tab-' + t);
+    if(p) p.classList.toggle('active', t === tab);
+    if(b) b.classList.toggle('active', t === tab);
+  });
+  const sub = document.getElementById('headerSubtitle');
+  if(tab === 'rodizio'){ if(sub) sub.textContent = 'Rodízio de Leads • Controle de Atendimento'; rodRenderTabela(); }
+  else if(tab === 'usuarios'){ if(sub) sub.textContent = 'Usuários • Controle de Acesso'; adminRenderLista(); }
+  else if(tab === 'painel-admin'){ if(sub) sub.textContent = 'Painel Administrativo'; renderAdminAll(); }
+  else { if(sub) sub.textContent = nomeDoMes(tab) + ' • Meta da equipe: R$ ' + fmt(metaEquipeDoMes(tab)); }
+}
+ 
+/* ══════════════════════════════════════════════════
+   AUTENTICAÇÃO DO ADMINISTRADOR (Firebase Auth real)
+══════════════════════════════════════════════════ */
+function alternarFormLogin(){
+  const vForm = document.getElementById('login-form-vendedora');
+  const aForm = document.getElementById('login-form-admin');
+  const toggle = document.getElementById('login-toggle-admin');
+  const sub = document.getElementById('login-sub-txt');
+  const mostrarAdmin = aForm.style.display === 'none';
+  vForm.style.display = mostrarAdmin ? 'none' : 'block';
+  aForm.style.display = mostrarAdmin ? 'block' : 'none';
+  document.getElementById('login-err').textContent = '';
+  if(mostrarAdmin){
+    toggle.textContent = '↩️ Voltar ao login de vendedora';
+    const semAdmin = !ADMINS_MAP || Object.keys(ADMINS_MAP).length === 0;
+    sub.textContent = semAdmin ? 'Primeiro acesso — crie sua conta de administrador' : 'Entre com seu e-mail de administrador';
+    document.getElementById('admin-login-btn').textContent = semAdmin ? 'Criar conta de administrador' : 'Entrar como administrador';
+  } else {
+    toggle.textContent = '🔐 Sou administrador';
+    sub.textContent = 'Entre com seu usuário e senha';
+  }
+}
+ 
+function traduzErroAuth(code){
+  const mapa = {
+    'auth/invalid-email': 'E-mail inválido.',
+    'auth/user-not-found': 'Administrador não encontrado.',
+    'auth/wrong-password': 'Senha incorreta.',
+    'auth/invalid-credential': 'E-mail ou senha incorretos.',
+    'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
+    'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.'
+  };
+  return mapa[code] || 'Não foi possível entrar. Tente novamente.';
+}
+ 
+function tentarLoginAdmin(){
+  const email = document.getElementById('admin-login-email').value.trim();
+  const senha = document.getElementById('admin-login-senha').value;
+  const err = document.getElementById('login-err');
+  if(!email || !senha){ err.textContent = '⚠️ Preencha e-mail e senha.'; return; }
+  const semAdmin = !ADMINS_MAP || Object.keys(ADMINS_MAP).length === 0;
+  const acao = semAdmin ? window.fbAdminCriarConta(email, senha) : window.fbAdminLogin(email, senha);
+  acao.then(cred=>{
+    err.textContent = '';
+    if(semAdmin) window.fbSalvar('admins/' + cred.user.uid, true);
+  }).catch(e=>{
+    err.textContent = '❌ ' + traduzErroAuth(e.code);
+  });
+}
+ 
+function logoutAdmin(){
+  if(window.fbAdminLogout) window.fbAdminLogout();
+}
+ 
+window.onFirebaseAuthChange = function(user){
+  authUserAtual = user;
+  souAdmin = !!(user && ADMINS_MAP && ADMINS_MAP[user.uid]);
+  atualizarUIAdmin();
+};
+ 
+window.onAdminsChange = function(val){
+  ADMINS_MAP = val || {};
+  souAdmin = !!(authUserAtual && ADMINS_MAP[authUserAtual.uid]);
+  atualizarUIAdmin();
+};
+ 
+function atualizarUIAdmin(){
+  const badge = document.getElementById('admin-badge');
+  const tab = document.getElementById('tab-painel-admin');
+  const setupBox = document.getElementById('admin-setup-box');
+  const semAdmin = !ADMINS_MAP || Object.keys(ADMINS_MAP).length === 0;
+  if(setupBox) setupBox.style.display = semAdmin ? 'block' : 'none';
+  if(souAdmin){
+    const overlay = document.getElementById('login-overlay');
+    if(overlay) overlay.style.display = 'none';
+    if(badge) badge.style.display = 'block';
+    if(tab) tab.style.display = 'inline-block';
+    seedInicialSeNecessario();
+    migrarTudoSeNecessario();
+    renderAdminAll();
+  } else {
+    if(badge) badge.style.display = 'none';
+    if(tab) tab.style.display = 'none';
+    const painelAtivo = document.getElementById('panel-painel-admin');
+    if(painelAtivo && painelAtivo.classList.contains('active')) switchTab(MESES_FIXOS[MESES_FIXOS.length - 1]);
+  }
+}
+ 
+/* ══════════════════════════════════════════════════
+   SEMENTE INICIAL E MIGRAÇÃO (roda uma vez, só o admin)
+══════════════════════════════════════════════════ */
+function seedInicialSeNecessario(){
+  if(!souAdmin) return;
+  if(MEMBROS === null){
+    const nomesIniciais = ['Ana','Isabelly','Vitoria','Iohanni','Keth'];
+    const semente = {};
+    nomesIniciais.forEach(nome=>{ semente[gerarId()] = { nome: nome, ativo: true, criadoEm: new Date().toISOString() }; });
+    window.fbSalvar('membros', semente);
+  }
+  if(MESES_CONFIG === null){
+    const cfg = {};
+    MESES_FIXOS.forEach((m,i)=>{ cfg[m] = { label: tabNomes[m], aberto: true, custom: false, ordem: i }; });
+    window.fbSalvar('mesesConfig', cfg);
+  }
+}
+ 
+function migrarTudoSeNecessario(){
+  if(!souAdmin || !MEMBROS) return;
+  MESES_FIXOS.forEach(mes=>{
+    if(jaMigrado[mes]) return;
+    if(VENDAS_MES[mes] && Object.keys(VENDAS_MES[mes]).length > 0){ jaMigrado[mes] = true; return; }
+    jaMigrado[mes] = true;
+    window.fbCarregar('ranking/' + mes, val=>{
+      if(!val || !Array.isArray(val) || val.length === 0) return;
+      const porNome = {};
+      Object.keys(MEMBROS).forEach(id=>{ porNome[MEMBROS[id].nome] = id; });
+      val.forEach(pessoa=>{
+        if(!pessoa || !pessoa.nome) return;
+        let membroId = porNome[pessoa.nome];
+        if(!membroId){
+          membroId = gerarId();
+          window.fbSalvar('membros/' + membroId, { nome: pessoa.nome, ativo: true, criadoEm: new Date().toISOString() });
+          porNome[pessoa.nome] = membroId;
+        }
+        if(pessoa.comissao && pessoa.comissao > 0){
+          const chave = window.fbNovaChave('vendasDetalhe/' + mes);
+          window.fbSalvar('vendasDetalhe/' + mes + '/' + chave, {
+            membroId: membroId, valor: Number(pessoa.comissao),
+            data: new Date().toISOString(), obs: 'Saldo migrado do sistema anterior',
+            criadoPor: 'migração automática', criadoEm: new Date().toISOString()
+          });
+        }
+      });
+    });
+  });
+}
+ 
+/* ══════════════════════════════════════════════════
+   LISTENERS DO NOVO MODELO
+══════════════════════════════════════════════════ */
+window.onMembrosChange = function(val){
+  MEMBROS = val;
+  recomputeTudo();
+  if(souAdmin){ seedInicialSeNecessario(); migrarTudoSeNecessario(); }
+  popularSelects();
+  if(souAdmin) renderAdminAll();
+};
+window.onMetasChange = function(val){
+  METAS_MES = val || {};
+  recomputeTudo();
+  if(souAdmin) renderAdminAll();
+};
+window.onMesesConfigChange = function(val){
+  MESES_CONFIG = val;
+  garantirTodosPaineis();
+  popularSelects();
+  recomputeTudo();
+  if(souAdmin){ seedInicialSeNecessario(); renderAdminAll(); }
+};
+window.onVendasChange = function(val){
+  VENDAS_MES = val || {};
+  recomputeTudo();
+  if(souAdmin){ migrarTudoSeNecessario(); renderAdminAll(); }
+};
+ 
+/* ══════════════════════════════════════════════════
+   RENDERIZAÇÃO DO PAINEL ADMINISTRATIVO
+══════════════════════════════════════════════════ */
+function switchAdminSub(nome){
+  ['dashboard','integrantes','vendas','metas','meses','config'].forEach(n=>{
+    const b = document.getElementById('asub-' + n);
+    const p = document.getElementById('apanel-' + n);
+    if(b) b.classList.toggle('active', n === nome);
+    if(p) p.classList.toggle('active', n === nome);
+  });
+  if(nome === 'dashboard') renderAdminDashboard();
+  if(nome === 'integrantes') renderAdminIntegrantes();
+  if(nome === 'vendas') renderAdminVendas();
+  if(nome === 'metas') renderAdminMetas();
+  if(nome === 'meses') renderAdminMeses();
+  if(nome === 'config') renderAdminConfigRaw();
+}
+ 
+function renderAdminAll(){
+  popularSelects();
+  renderAdminDashboard();
+  renderAdminIntegrantes();
+  renderAdminVendas();
+  renderAdminMetas();
+  renderAdminMeses();
+}
+ 
+function popularSelects(){
+  const meses = todosOsMeses();
+  const opcoesMes = meses.map(m=>'<option value="' + m + '">' + escHtml(nomeDoMes(m)) + '</option>').join('');
+  ['admin-dash-mes','admin-venda-mes','admin-ajuste-mes','admin-vfil-mes','admin-metas-mes'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const atual = el.value;
+    const extra = id === 'admin-vfil-mes' ? '<option value="">Todos os meses</option>' : '';
+    el.innerHTML = extra + opcoesMes;
+    if(atual && meses.includes(atual)) el.value = atual;
+  });
+  const membrosArr = MEMBROS ? Object.keys(MEMBROS).filter(id=>MEMBROS[id].ativo !== false).map(id=>({id:id, nome:MEMBROS[id].nome})) : [];
+  const opcoesMembro = membrosArr.map(m=>'<option value="' + m.id + '">' + escHtml(m.nome) + '</option>').join('');
+  ['admin-venda-membro','admin-ajuste-membro'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const atual = el.value;
+    el.innerHTML = opcoesMembro;
+    if(atual) el.value = atual;
+  });
+  const filMembro = document.getElementById('admin-vfil-membro');
+  if(filMembro){
+    const atual = filMembro.value;
+    filMembro.innerHTML = '<option value="">Todos os integrantes</option>' + opcoesMembro;
+    if(atual) filMembro.value = atual;
+  }
+  const dataInp = document.getElementById('admin-venda-data');
+  if(dataInp && !dataInp.value) dataInp.value = new Date().toISOString().slice(0,10);
+  uiAtualizarTotalAtual();
+}
+ 
+function renderAdminDashboard(){
+  const cards = document.getElementById('admin-dash-cards');
+  if(!cards) return;
+  const meses = todosOsMeses();
+  let totalGeral = 0;
+  const totalIntegrantes = MEMBROS ? Object.keys(MEMBROS).filter(id=>MEMBROS[id].ativo !== false).length : 0;
+  meses.forEach(m=>{ (dados[m] || []).forEach(v=>{ totalGeral += v.comissao; }); });
+  cards.innerHTML =
+    '<div class="rod-card"><div class="rod-card-icon">💰</div><div class="rod-card-val">R$ ' + fmt(totalGeral) + '</div><div class="rod-card-label">Total geral (todos os meses)</div></div>' +
+    '<div class="rod-card"><div class="rod-card-icon">👥</div><div class="rod-card-val">' + totalIntegrantes + '</div><div class="rod-card-label">Integrantes ativos</div></div>' +
+    '<div class="rod-card"><div class="rod-card-icon">🗓️</div><div class="rod-card-val">' + meses.length + '</div><div class="rod-card-label">Meses no sistema</div></div>';
+ 
+  const selMes = document.getElementById('admin-dash-mes');
+  const mes = selMes ? (selMes.value || meses[0]) : meses[0];
+  const tbody = document.getElementById('admin-dash-tbody');
+  if(!tbody || !mes) return;
+  const lista = [...(dados[mes] || [])].sort((a,b)=>b.comissao - a.comissao);
+  if(lista.length === 0){ tbody.innerHTML = '<tr><td colspan="4" class="rod-empty">Sem integrantes cadastrados ainda.</td></tr>'; return; }
+  tbody.innerHTML = lista.map(v=>{
+    const meta = metaIndividualDoMembro(mes, v.id);
+    const pct = meta > 0 ? Math.round((v.comissao / meta) * 100) : 0;
+    return '<tr><td>' + escHtml(v.nome) + '</td><td>R$ ' + fmt(v.comissao) + '</td><td>R$ ' + fmt(meta) + '</td><td>' + pct + '%</td></tr>';
+  }).join('');
+}
+ 
+function renderAdminIntegrantes(){
+  const tbody = document.getElementById('admin-membros-tbody');
+  if(!tbody) return;
+  if(!MEMBROS || Object.keys(MEMBROS).length === 0){ tbody.innerHTML = '<tr><td colspan="3" class="rod-empty">Nenhum integrante cadastrado.</td></tr>'; return; }
+  tbody.innerHTML = Object.keys(MEMBROS).map(id=>{
+    const m = MEMBROS[id];
+    const statusBadge = m.ativo === false ? '<span class="mes-badge-fechado">Inativo</span>' : '<span class="mes-badge-aberto">Ativo</span>';
+    return '<tr>' +
+      '<td><strong style="color:#ffd86a">' + escHtml(m.nome) + '</strong></td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td>' +
+        '<button class="rod-btn-action" onclick="uiEditarMembro(\'' + id + '\')" title="Editar nome">✏️ Editar</button>' +
+        '<button class="rod-btn-action" onclick="uiToggleAtivoMembro(\'' + id + '\')" title="Ativar/Inativar">' + (m.ativo === false ? '✅ Ativar' : '🚫 Inativar') + '</button>' +
+        '<button class="rod-btn-action rod-btn-del" onclick="uiRemoverMembro(\'' + id + '\')" title="Remover">🗑️ Remover</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+ 
+function uiAdicionarMembro(){
+  const inp = document.getElementById('admin-inp-membro-nome');
+  const msg = document.getElementById('admin-membro-msg');
+  const nome = inp.value.trim();
+  if(!nome){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Digite um nome.'; return; }
+  const id = gerarId();
+  window.fbSalvar('membros/' + id, { nome: nome, ativo: true, criadoEm: new Date().toISOString() });
+  inp.value = '';
+  msg.style.color = '#5ddd5d'; msg.textContent = '✅ Integrante adicionado!';
+  setTimeout(()=>{ msg.textContent = ''; }, 3000);
+}
+ 
+function uiEditarMembro(id){
+  const atual = MEMBROS[id] ? MEMBROS[id].nome : '';
+  const novo = prompt('Novo nome do integrante:', atual);
+  if(novo === null) return;
+  const nome = novo.trim();
+  if(!nome) return;
+  window.fbSalvar('membros/' + id + '/nome', nome);
+}
+ 
+function uiToggleAtivoMembro(id){
+  const atual = MEMBROS[id] ? MEMBROS[id].ativo !== false : true;
+  window.fbSalvar('membros/' + id + '/ativo', !atual);
+}
+ 
+function uiRemoverMembro(id){
+  const nome = MEMBROS[id] ? MEMBROS[id].nome : id;
+  let temVendas = false;
+  Object.keys(VENDAS_MES).forEach(mes=>{
+    Object.values(VENDAS_MES[mes] || {}).forEach(v=>{ if(v.membroId === id) temVendas = true; });
+  });
+  if(temVendas){
+    if(!confirm('"' + nome + '" já tem vendas registradas no histórico. Para não perder esses dados, ele será marcado como INATIVO (some do ranking, mas o histórico continua). Continuar?')) return;
+    window.fbSalvar('membros/' + id + '/ativo', false);
+  } else {
+    if(!confirm('Remover "' + nome + '" definitivamente? Ele não tem nenhuma venda registrada, então pode ser excluído sem perda de dados.')) return;
+    window.fbSalvar('membros/' + id, null);
+  }
+}
+ 
+function uiAdminAdicionarVenda(){
+  const mes = document.getElementById('admin-venda-mes').value;
+  const membroId = document.getElementById('admin-venda-membro').value;
+  const valor = parseFloat(document.getElementById('admin-venda-valor').value);
+  const data = document.getElementById('admin-venda-data').value;
+  const obs = document.getElementById('admin-venda-obs').value.trim();
+  const msg = document.getElementById('admin-venda-msg');
+  if(!mes || !membroId || !valor){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Preencha mês, integrante e valor.'; return; }
+  const chave = window.fbNovaChave('vendasDetalhe/' + mes);
+  window.fbSalvar('vendasDetalhe/' + mes + '/' + chave, {
+    membroId: membroId, valor: valor,
+    data: data ? new Date(data + 'T12:00:00').toISOString() : new Date().toISOString(),
+    obs: obs, criadoPor: (authUserAtual && authUserAtual.email) || 'admin', criadoEm: new Date().toISOString()
+  });
+  document.getElementById('admin-venda-valor').value = '';
+  document.getElementById('admin-venda-obs').value = '';
+  msg.style.color = '#5ddd5d'; msg.textContent = '✅ Venda lançada!';
+  setTimeout(()=>{ msg.textContent = ''; }, 3000);
+}
+ 
+function uiAtualizarTotalAtual(){
+  const mesEl = document.getElementById('admin-ajuste-mes');
+  const membroEl = document.getElementById('admin-ajuste-membro');
+  const span = document.getElementById('admin-ajuste-atual');
+  if(!span) return;
+  const mes = mesEl ? mesEl.value : null;
+  const membroId = membroEl ? membroEl.value : null;
+  if(!mes || !membroId){ span.textContent = 'R$ 0,00'; return; }
+  const item = (dados[mes] || []).find(v=>v.id === membroId);
+  span.textContent = 'R$ ' + fmt(item ? item.comissao : 0);
+}
+ 
+function uiAdminAjustarTotal(){
+  const mes = document.getElementById('admin-ajuste-mes').value;
+  const membroId = document.getElementById('admin-ajuste-membro').value;
+  const novoTotal = parseFloat(document.getElementById('admin-ajuste-valor').value);
+  const msg = document.getElementById('admin-ajuste-msg');
+  if(!mes || !membroId || isNaN(novoTotal) || novoTotal < 0){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Preencha mês, integrante e um valor válido.'; return; }
+  const item = (dados[mes] || []).find(v=>v.id === membroId);
+  const atual = item ? item.comissao : 0;
+  const diferenca = novoTotal - atual;
+  if(diferenca === 0){ msg.style.color = '#888'; msg.textContent = 'O total já é esse valor.'; return; }
+  const chave = window.fbNovaChave('vendasDetalhe/' + mes);
+  window.fbSalvar('vendasDetalhe/' + mes + '/' + chave, {
+    membroId: membroId, valor: diferenca, data: new Date().toISOString(),
+    obs: 'Ajuste administrativo (total definido para R$ ' + fmt(novoTotal) + ')',
+    criadoPor: (authUserAtual && authUserAtual.email) || 'admin', criadoEm: new Date().toISOString()
+  });
+  document.getElementById('admin-ajuste-valor').value = '';
+  msg.style.color = '#5ddd5d'; msg.textContent = '✅ Total atualizado para R$ ' + fmt(novoTotal) + '!';
+  setTimeout(()=>{ msg.textContent = ''; }, 3500);
+}
+ 
+function renderAdminVendas(){
+  const tbody = document.getElementById('admin-vendas-tbody');
+  if(!tbody) return;
+  const filMesEl = document.getElementById('admin-vfil-mes');
+  const filMembroEl = document.getElementById('admin-vfil-membro');
+  const filMes = filMesEl ? filMesEl.value : '';
+  const filMembro = filMembroEl ? filMembroEl.value : '';
+  const mesesAlvo = filMes ? [filMes] : todosOsMeses();
+  let linhas = [];
+  mesesAlvo.forEach(mes=>{
+    const vendas = VENDAS_MES[mes] || {};
+    Object.keys(vendas).forEach(vid=>{
+      const v = vendas[vid];
+      if(filMembro && v.membroId !== filMembro) return;
+      linhas.push(Object.assign({ id: vid, mes: mes }, v));
+    });
+  });
+  linhas.sort((a,b)=> new Date(b.data) - new Date(a.data));
+  let total = 0; linhas.forEach(l=>{ total += Number(l.valor) || 0; });
+  const totalEl = document.getElementById('admin-vendas-total');
+  if(totalEl) totalEl.textContent = 'R$ ' + fmt(total);
+  if(linhas.length === 0){ tbody.innerHTML = '<tr><td colspan="5" class="rod-empty">Nenhuma venda encontrada.</td></tr>'; return; }
+  tbody.innerHTML = linhas.map(l=>{
+    const nomeMembro = MEMBROS && MEMBROS[l.membroId] ? MEMBROS[l.membroId].nome : '(removido)';
+    const dataFmt = l.data ? new Date(l.data).toLocaleDateString('pt-BR') : '-';
+    return '<tr>' +
+      '<td>' + dataFmt + '<br><span style="color:#666;font-size:10px">' + escHtml(nomeDoMes(l.mes)) + '</span></td>' +
+      '<td>' + escHtml(nomeMembro) + '</td>' +
+      '<td>R$ ' + fmt(l.valor) + '</td>' +
+      '<td>' + escHtml(l.obs || '') + '</td>' +
+      '<td>' +
+        '<button class="rod-btn-action" onclick="uiEditarVenda(\'' + l.mes + '\',\'' + l.id + '\')" title="Editar">✏️</button>' +
+        '<button class="rod-btn-action rod-btn-del" onclick="uiExcluirVenda(\'' + l.mes + '\',\'' + l.id + '\')" title="Excluir">🗑️</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+ 
+function uiEditarVenda(mes, vid){
+  const v = VENDAS_MES[mes] && VENDAS_MES[mes][vid];
+  if(!v) return;
+  const novoValor = prompt('Novo valor da venda (R$):', v.valor);
+  if(novoValor === null) return;
+  const num = parseFloat(novoValor);
+  if(isNaN(num)) return;
+  window.fbSalvar('vendasDetalhe/' + mes + '/' + vid + '/valor', num);
+}
+ 
+function uiExcluirVenda(mes, vid){
+  if(!confirm('Excluir esta venda? Essa ação não pode ser desfeita.')) return;
+  window.fbSalvar('vendasDetalhe/' + mes + '/' + vid, null);
+}
+ 
+function renderAdminMetas(){
+  const selMes = document.getElementById('admin-metas-mes');
+  const mes = selMes ? (selMes.value || todosOsMeses()[0]) : todosOsMeses()[0];
+  if(!mes) return;
+  const equipeInp = document.getElementById('admin-meta-equipe');
+  if(equipeInp) equipeInp.value = metaEquipeDoMes(mes);
+  const tbody = document.getElementById('admin-metas-tbody');
+  if(!tbody) return;
+  const membrosAtivos = MEMBROS ? Object.keys(MEMBROS).filter(id=>MEMBROS[id].ativo !== false) : [];
+  if(membrosAtivos.length === 0){ tbody.innerHTML = '<tr><td colspan="3" class="rod-empty">Nenhum integrante ativo.</td></tr>'; return; }
+  tbody.innerHTML = membrosAtivos.map(id=>{
+    const nome = MEMBROS[id].nome;
+    const meta = metaIndividualDoMembro(mes, id);
+    return '<tr><td>' + escHtml(nome) + '</td>' +
+      '<td><input type="number" step="0.01" id="meta-ind-' + id + '" value="' + meta + '" style="width:120px;padding:6px 8px;border-radius:7px;border:1px solid #444;background:#1a1a18;color:#ffd86a;"></td>' +
+      '<td><button class="rod-btn-action" onclick="uiSalvarMetaIndividual(\'' + id + '\')">💾 Salvar</button></td></tr>';
+  }).join('');
+}
+ 
+function uiSalvarMetaEquipe(){
+  const mes = document.getElementById('admin-metas-mes').value;
+  const valor = parseFloat(document.getElementById('admin-meta-equipe').value);
+  const msg = document.getElementById('admin-meta-equipe-msg');
+  if(!mes || isNaN(valor) || valor < 0){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Valor inválido.'; return; }
+  window.fbSalvar('metas/' + mes + '/equipe', valor);
+  msg.style.color = '#5ddd5d'; msg.textContent = '✅ Meta da equipe salva!';
+  setTimeout(()=>{ msg.textContent = ''; }, 3000);
+}
+ 
+function uiSalvarMetaIndividual(membroId){
+  const mes = document.getElementById('admin-metas-mes').value;
+  const inp = document.getElementById('meta-ind-' + membroId);
+  const valor = parseFloat(inp.value);
+  if(!mes || isNaN(valor) || valor < 0) return;
+  window.fbSalvar('metas/' + mes + '/individual/' + membroId, valor);
+}
+ 
+function renderAdminMeses(){
+  const tbody = document.getElementById('admin-meses-tbody');
+  if(!tbody) return;
+  const meses = todosOsMeses();
+  tbody.innerHTML = meses.map(m=>{
+    const aberto = mesEstaAberto(m);
+    const label = nomeDoMes(m);
+    return '<tr><td>' + m + '</td><td>' + escHtml(label) + '</td>' +
+      '<td>' + (aberto ? '<span class="mes-badge-aberto">Aberto</span>' : '<span class="mes-badge-fechado">Fechado</span>') + '</td>' +
+      '<td>' +
+        '<button class="rod-btn-action" onclick="uiRenomearMes(\'' + m + '\')" title="Renomear">✏️ Renomear</button>' +
+        '<button class="rod-btn-action" onclick="uiToggleMesAberto(\'' + m + '\')" title="Abrir/Fechar">' + (aberto ? '🔒 Fechar' : '🔓 Reabrir') + '</button>' +
+      '</td></tr>';
+  }).join('');
+}
+ 
+function uiCriarMes(){
+  const idInp = document.getElementById('admin-novo-mes-id');
+  const labelInp = document.getElementById('admin-novo-mes-label');
+  const msg = document.getElementById('admin-mes-msg');
+  const id = idInp.value.trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
+  const label = labelInp.value.trim();
+  if(!id || !label){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Preencha identificador e nome exibido.'; return; }
+  if(todosOsMeses().includes(id)){ msg.style.color = '#e05555'; msg.textContent = '⚠️ Já existe um mês com esse identificador.'; return; }
+  const cfg = Object.assign({}, MESES_CONFIG || {});
+  cfg[id] = { label: label, aberto: true, custom: true, ordem: Object.keys(cfg).length };
+  window.fbSalvar('mesesConfig', cfg);
+  idInp.value = ''; labelInp.value = '';
+  msg.style.color = '#5ddd5d'; msg.textContent = '✅ Mês criado! Ele já aparece nas abas.';
+  setTimeout(()=>{ msg.textContent = ''; }, 3500);
+}
+ 
+function uiRenomearMes(mesId){
+  const atual = nomeDoMes(mesId);
+  const novo = prompt('Novo nome exibido para este mês:', atual);
+  if(novo === null) return;
+  const label = novo.trim();
+  if(!label) return;
+  const cfg = Object.assign({}, MESES_CONFIG || {});
+  cfg[mesId] = Object.assign({ label: label, custom: !!(cfg[mesId] && cfg[mesId].custom), aberto: mesEstaAberto(mesId) }, cfg[mesId], { label: label });
+  window.fbSalvar('mesesConfig', cfg);
+  tabNomes[mesId] = label;
+  const btn = document.getElementById('tab-' + mesId);
+  if(btn) btn.textContent = label;
+}
+ 
+function uiToggleMesAberto(mesId){
+  const cfg = Object.assign({}, MESES_CONFIG || {});
+  const abertoAtual = mesEstaAberto(mesId);
+  cfg[mesId] = Object.assign({ label: nomeDoMes(mesId), custom: false }, cfg[mesId], { aberto: !abertoAtual });
+  window.fbSalvar('mesesConfig', cfg);
+}
+ 
+function renderAdminConfigRaw(){
+  const pre = document.getElementById('admin-raw-json');
+  if(!pre) return;
+  const snapshot = { membros: MEMBROS, metas: METAS_MES, mesesConfig: MESES_CONFIG, vendasDetalhe: VENDAS_MES, admins: ADMINS_MAP };
+  pre.textContent = JSON.stringify(snapshot, null, 2);
+}
+ 
+/* ── Primeira renderização (usa o que já estiver disponível) ── */
+recomputeTudo();
+ 
+</script>
 </body>
 </html>
+ 
