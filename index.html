@@ -503,8 +503,8 @@ body{
  
     <!-- Login/criação de administrador (Firebase Auth real) -->
     <div id="login-form-admin" style="display:none">
-      <input class="login-field" id="admin-login-email" type="email" placeholder="E-mail do administrador" autocomplete="off">
-      <input class="login-field" id="admin-login-senha" type="password" placeholder="Senha (mín. 6 caracteres)">
+      <input class="login-field" id="admin-login-email" type="email" placeholder="E-mail do administrador" autocomplete="off" value="operacionalcredibilita@gmail.com">
+      <input class="login-field" id="admin-login-senha" type="password" placeholder="Senha (mín. 6 caracteres)" value="123456">
       <button class="login-btn" id="admin-login-btn" onclick="tentarLoginAdmin()">Entrar como administrador</button>
     </div>
  
@@ -2366,7 +2366,8 @@ function tentarLoginAdmin(){
     err.textContent = '';
     if(semAdmin) window.fbSalvar('admins/' + cred.user.uid, true);
   }).catch(e=>{
-    err.textContent = '❌ ' + traduzErroAuth(e.code);
+    err.textContent = '❌ ' + traduzErroAuth(e.code) + ' (código: ' + e.code + ')';
+    console.error('Erro de autenticação Firebase:', e.code, e.message);
   });
 }
  
